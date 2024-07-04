@@ -1,0 +1,27 @@
+: 1500620502:0;yum install wget vim zsh git screen zip aria2  unzip -y && sh -c "$(wget https://raw.github.com/robbyrussell/oh-my-zsh/master/tools/install.sh -O -)" -Y
+
+: 1500621757:0;/application/nginx/sbin/nginx 
+: 1500621769:0;/application/nginx/sbin/nginx -t
+: 1500622104:0;/application/nginx/sbin/nginx -s stop
+: 1500622132:0;/application/nginx/sbin/nginx -s reload
+
+: 1500622567:0;cd /  && mkdir wt && cd /wt && yum install epel-release -y && yum update -y && yum -y install transmission transmission-daemon
+: 1500628228:0;systemctl start transmission-daemon.service
+: 1500628247:0;systemctl stop transmission-daemon.service
+: 1500629313:0;vim /var/lib/transmission/.config/transmission-daemon/settings.json
+
+: 1500629561:0;aria2c -Z -P "http://10.126.0.3/p3/opg{38,39,40,41,42,43,44,45,46,47,48,49,50,51,52,53,54,55,56,57,58,59,60,61,62,63,64,65,66,67,68}"
+
+: 1500630133:0;for name in `ls`; do openssl enc -des-cbc -k 996 -iv 0000000000000001 -nosalt -in $name -out $name.data && rm $name; done
+
+: 1500630150:0;git clone https://github.com/markternu/markinfo.git
+: 1500631209:0;git clone https://github.com/markternu/markapp.git
+
+: 1500631216:0;netstat -lntup|grep 80
+: 1500633106:0;sudo bash -c "$(curl -fsSL https://raw.githubusercontent.com/markternu/markinfo/master/trojan/TrojanOne.sh)"
+: 1500737098:0;for name in `ls`; do zip -P abcd1234 $name.zip $name && rm -dr $name; done
+: 1500737294:0;for name in `ls`; do openssl enc -des-cbc -k 889 -iv 0000000000000001 -nosalt -in $name -out $name.mp4 -d; done
+
+
+: 1720055824:0;yum install vim wget pcre pcre-devel -y && wget -q http://nginx.org/download/nginx-1.20.0.tar.gz && useradd www -s /sbin/nologin -M && tar xf nginx-1.20.0.tar.gz && cd nginx-1.20.0 && yum install openssl openssl-devel gcc -y && ./configure --user=www --group=www --with-http_ssl_module --with-http_stub_status_module --prefix=/application/nginx-1.20.0/ && make && make install && ln -s /application/nginx-1.20.0/ /application/nginx && ln -s /application/nginx/sbin/nginx /usr/bin/nginx
+: 1720056333:0;ls
