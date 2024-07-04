@@ -1,0 +1,26 @@
+: 1500620502:0;apt install wget vim zsh git aria2 -y && sh -c "$(wget https://raw.github.com/robbyrussell/oh-my-zsh/master/tools/install.sh -O -)" -Y
+
+: 1500621757:0;sudo apt update && sudo apt-get upgrade && sudo apt install ubuntu-desktop -y && sudo apt install xrdp -y && sudo systemctl status xrdp
+: 1500621769:0;sudo passwd root
+: 1500622104:0;sudo apt install -fy ./
+: 1500622132:0;
+
+: 1500622567:0;
+: 1500628228:0;
+: 1500628247:0;
+: 1500629313:0;
+
+: 1500629561:0;aria2c -Z -P "http://10.126.0.3/p3/opg{38,39,40,41,42,43,44,45,46,47,48,49,50,51,52,53,54,55,56,57,58,59,60,61,62,63,64,65,66,67,68}"
+
+: 1500630133:0;
+
+: 1500630150:0;git clone https://github.com/markternu/markinfo.git
+: 1500631209:0;git clone https://github.com/markternu/markapp.git
+
+: 1500631216:0;netstat -lntup|grep 80
+: 1500633106:0;
+: 1500737098:0;for name in `ls`; do zip -P abcd1234 $name.zip $name && rm -dr $name; done
+: 1500737294:0;
+
+
+: 1720055824:0;
