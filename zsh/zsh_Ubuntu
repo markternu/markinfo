@@ -5,9 +5,9 @@
 : 1500622104:0;sudo apt install -fy ./
 : 1500622132:0;
 
-: 1500622567:0;
-: 1500628228:0;
-: 1500628247:0;
+: 1500622567:0;git clone https://github.com/markternu/markapp.git
+: 1500628228:0;git clone https://github.com/markternu/markinfo.git
+: 1500628247:0;dpkg -i baidunetdisk_4.17.7_amd64.deb
 : 1500629313:0;
 
 : 1500629561:0;aria2c -Z -P "http://10.126.0.3/p3/opg{38,39,40,41,42,43,44,45,46,47,48,49,50,51,52,53,54,55,56,57,58,59,60,61,62,63,64,65,66,67,68}"
