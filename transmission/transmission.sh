@@ -1,12 +1,13 @@
 #!/bin/bash
 
 # 安装 Transmission
-sudo yum install -y epel-release
-sudo yum install -y transmission-daemon
+sudo yum update -y && sudo yum install epel-release -y && \
+sudo yum install wget vim net-tools  zsh git screen zip aria2 jq unzip -y && \
+sudo yum install -y transmission-daemon && \
 
 # 停止 Transmission 以便修改配置文件
-systemctl start transmission-daemon.service
-systemctl stop transmission-daemon.service
+systemctl start transmission-daemon.service && \
+systemctl stop transmission-daemon.service && \
 
 # 修改配置文件
 CONFIG_FILE="/var/lib/transmission/.config/transmission-daemon/settings.json"
@@ -23,7 +24,7 @@ sudo jq '.
   | .["speed-limit-up-enabled"] = true' $CONFIG_FILE | sudo tee $CONFIG_FILE
 
 # 启动 Transmission
-systemctl start transmission-daemon.service
+systemctl start transmission-daemon.service  && \
 
 # 获取并打印 rpc-password 和 rpc-username 的值
 RPC_PASSWORD=$(jq -r '."rpc-password"' $CONFIG_FILE)

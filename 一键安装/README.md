@@ -34,3 +34,14 @@ sudo yum update -y && sudo yum install epel-release -y && yum install wget vim n
 cd && sudo bash -c "curl -fsSL https://raw.githubusercontent.com/markternu/markinfo/master/zsh/zsh_centos > .zsh_history"
 
 ```
+
+
+# 3 transmission
+
+```
+
+
+sudo bash -c "$(curl -fsSL https://raw.githubusercontent.com/markternu/markinfo/master/transmission/transmission.sh)"
+
+```
+ 
