@@ -13,8 +13,8 @@
 : 1497543117:0;
 : 1497543175:0;git clone https://github.com/markternu/markinfo.git
 : 1497544787:0;git clone https://github.com/markternu/markapp.git
-: 1497544794:0;
-: 1497585796:0; 
+: 1497544794:0;screen -R hbbs1
+: 1497585796:0;screen -R hbbr2
 : 1497586405:0;
 : 1497587309:0;
 : 1497587315:0;

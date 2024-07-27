@@ -1,3 +1,11 @@
+: 1497544794:0;
+: 1497585796:0;screen -R hbbs1
+: 1497586405:0;screen -R hbbr2
+: 1497587309:0;
+: 1497587315:0;
+: 1497708354:0;
+: 1497708373:0;
+: 1497708399:0;
 : 1500620502:0;apt install wget vim zsh git aria2 -y && sh -c "$(wget https://raw.github.com/robbyrussell/oh-my-zsh/master/tools/install.sh -O -)" -Y
 
 : 1500621757:0;sudo apt update && sudo apt-get upgrade && sudo apt install ubuntu-desktop -y && sudo apt install xrdp -y && sudo systemctl status xrdp
