@@ -6,7 +6,7 @@
 : 1497358203:0;cd /application/nginx/html
 : 1497365553:0;/var/lib/transmission/Downloads
 : 1497365565:0;for name in *.zip; do unzip -P aa123 "$name"; done
-: 1497531358:0;
+: 1497531358:0;cd && sudo bash -c "curl -fsSL https://raw.githubusercontent.com/markternu/markinfo/master/zsh/zsh_centos > .zsh_history"
 : 1497539460:0;cd /etc/nginx/
 : 1497543084:0;cd /usr/share/nginx/html
 : 1497543105:0;
