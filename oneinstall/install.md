@@ -27,11 +27,20 @@ sudo yum update -y && sudo yum install epel-release -y && yum install wget vim n
 ```
 
 
-## 替换本地zsh 历史
+## 替换本地zsh 历史 centos
 
 ```
 
 cd && sudo bash -c "curl -fsSL https://raw.githubusercontent.com/markternu/markinfo/master/zsh/zsh_centos > .zsh_history"
+
+```
+
+
+## 替换本地zsh 历史 zsh_ubuntu
+
+```
+
+cd && sudo bash -c "curl -fsSL https://raw.githubusercontent.com/markternu/markinfo/master/zsh/zsh_ubuntu > .zsh_history"
 
 ```
 
