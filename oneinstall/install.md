@@ -40,7 +40,7 @@ cd && sudo bash -c "curl -fsSL https://raw.githubusercontent.com/markternu/marki
 
 ```
 
-cd && sudo bash -c "curl -fsSL https://raw.githubusercontent.com/markternu/markinfo/master/zsh/zsh_ubuntu > .zsh_history"
+cd && sudo bash -c "curl -fsSL https://raw.githubusercontent.com/markternu/markinfo/master/zsh/zshubuntu > .zsh_history"
 
 ```
 
