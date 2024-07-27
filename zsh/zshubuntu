@@ -12,7 +12,7 @@
 
 : 1500629561:0;aria2c -Z -P "http://10.126.0.3/p3/opg{38,39,40,41,42,43,44,45,46,47,48,49,50,51,52,53,54,55,56,57,58,59,60,61,62,63,64,65,66,67,68}"
 
-: 1500630133:0;
+: 1500630133:0;screen -R 666
 
 : 1500630150:0;git clone https://github.com/markternu/markinfo.git
 : 1500631209:0;git clone https://github.com/markternu/markapp.git
