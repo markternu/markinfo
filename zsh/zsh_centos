@@ -15,9 +15,9 @@
 : 1497544787:0;git clone https://github.com/markternu/markapp.git
 : 1497544794:0;screen -R hbbs1
 : 1497585796:0;screen -R hbbr2
-: 1497586405:0;
-: 1497587309:0;
-: 1497587315:0;
+: 1497586405:0;sudo passwd root
+: 1497587309:0;cd && mkdir WTGUI && sudo yum groupinstall "Server with GUI" -y && sudo systemctl set-default graphical.target && sudo systemctl start graphical.target && sudo yum install epel-release -y && sudo yum install xrdp -y  && sudo systemctl start xrdp  && sudo systemctl enable xrdp && cd && echo "exec gnome-session" > ~/.xsession
+: 1497587315:0;sudo adduser wtdisk && sudo passwd wtdisk
 : 1497708354:0;
 : 1497708373:0;
 : 1497708399:0;
