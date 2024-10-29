@@ -1,4 +1,23 @@
-# 1 一键安装Trojan
+# 1.1 一键安装Trojan Ubuntu
+
+- via  ***curl***
+```
+
+sudo bash -c "$(curl -fsSL https://raw.githubusercontent.com/markternu/markinfo/master/trojan/ubuntuTrojanInstall.sh)"
+
+```
+
+- via ***wget***
+
+```
+
+sudo bash -c "$(wget -O- https://raw.githubusercontent.com/markternu/markinfo/master/trojan/ubuntuTrojanInstall.sh)"
+
+```
+
+
+
+# 1.2 一键安装Trojan centos
 
 - via  ***curl***
 ```
