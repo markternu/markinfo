@@ -63,8 +63,17 @@ cd && sudo bash -c "curl -fsSL https://raw.githubusercontent.com/markternu/marki
 
 ```
 
+# 3.1 transmission Ubuntu
 
-# 3 transmission
+```
+
+
+sudo bash -c "$(curl -fsSL https://raw.githubusercontent.com/markternu/markinfo/master/transmission/ubuntu_transmission_install.sh)"
+
+```
+ 
+
+# 3.2 transmission centos
 
 ```
 
