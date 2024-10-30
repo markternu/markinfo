@@ -27,7 +27,8 @@ echo "======================2=========================="
 echo "================================================="
 # 步骤2. nginx conf
 nginx_conf="/etc/nginx/nginx.conf"
-cp /etc/nginx/nginx.conf /etc/nginx/nginx.conf.default && \
+cp /etc/nginx/sites-enabled/default /etc/nginx/sites-enabled/default2024.bk && \
+
 # 使用sed命令替换所有localhost的值
 sudo sed -i -E "s/(server_name[[:space:]]+)[^;]+;/\1$value_url;/" "$nginx_conf" && \
 echo "Nginx server_name has been updated to $value_url" && \
@@ -57,8 +58,10 @@ echo "================================================="
 echo "======================7=========================="
 echo "================================================="
 # 步骤7. 更换nginx config
-sudo mv /etc/nginx/nginx.conf /etc/nginx/nginxBK2024.conf && \
-sudo cp /etc/nginx/nginx.conf.default /etc/nginx/nginx.conf && \
+# sudo mv /etc/nginx/nginx.conf /etc/nginx/nginxBK2024.conf && \
+
+mv /etc/nginx/sites-enabled/default /etc/nginx/sites-enabled/httpsBK.bk && \
+cp /etc/nginx/sites-enabled/default2024.bk /etc/nginx/sites-enabled/default && \
 
 echo "================================================="
 echo "======================8=========================="
