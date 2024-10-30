@@ -1,97 +1,98 @@
 #!/bin/bash
 
-# 提示用户输入参数 域名和trojan的密码
-read -p "Please input URL:" value_url
-read -p "Please input password:" value_trojan_psw
+# 检查是否为root用户
+if [ "$EUID" -ne 0 ]; then 
+  echo "请以root权限运行此脚本"
+  exit
+fi
 
-# 声明字符串
-string_cert="/etc/letsencrypt/live/$value_url/fullchain.pem"
-string_key="/etc/letsencrypt/live/$value_url/privkey.pem"
+# 获取用户输入
+read -p "请输入您的域名: " domain_name
+read -p "请输入代理密码: " proxy_password
 
-# Certbot命令
-certbot_command="certbot --register-unsafely-without-email --agree-tos --nginx -d"
+# 安装必要的软件包
+apt-get update
+apt-get install -y nginx certbot python3-certbot-nginx wget unzip
 
-# 拼接命令
-full_command="$certbot_command $value_url"
+# 配置初始Nginx
+cat > /etc/nginx/sites-available/default << EOL
+server {
+    listen 80;
+    server_name ${domain_name};
+    root /var/www/html;
+    index index.html;
+}
+EOL
 
-echo "================================================="
-echo "======================1=========================="
-echo "================================================="
-# 步骤1. 安装必备软件
-sudo apt update && sudo apt upgrade -y && \
-sudo apt install wget vim net-tools zsh git screen zip aria2 jq unzip -y && \
-sudo apt install nginx certbot python3-certbot-nginx -y && \
+# 重启Nginx
+systemctl restart nginx
 
-echo "================================================="
-echo "======================2=========================="
-echo "================================================="
-# 步骤2. nginx conf
-nginx_conf="/etc/nginx/nginx.conf"
-sudo cp /etc/nginx/sites-enabled/default /etc/nginx/sites-enabled/default2024.bk && \
-sudo cp /etc/nginx/nginx.conf /etc/nginx/nginx.conf.bk && \
+# 获取SSL证书
+certbot --nginx -d ${domain_name} --non-interactive --agree-tos --email webmaster@${domain_name}
 
-# 使用sed命令替换所有localhost的值
-sudo sed -i -E "s/(server_name[[:space:]]+)[^;]+;/\1$value_url;/" "$nginx_conf" && \
-echo "Nginx server_name has been updated to $value_url" && \
-sudo cat /etc/nginx/nginx.conf && \
+# 安装Trojan
+wget https://github.com/trojan-gfw/trojan/releases/download/v1.16.0/trojan-1.16.0-linux-amd64.tar.xz
+tar xf trojan-1.16.0-linux-amd64.tar.xz
+cd trojan
 
-echo "================================================="
-echo "======================4=========================="
-echo "================================================="
-# 步骤4. 启动nginx
-sudo systemctl start nginx && \
+# 配置Trojan
+cat > config.json << EOL
+{
+    "run_type": "server",
+    "local_addr": "0.0.0.0",
+    "local_port": 443,
+    "remote_addr": "127.0.0.1",
+    "remote_port": 80,
+    "password": [
+        "${proxy_password}"
+    ],
+    "ssl": {
+        "cert": "/etc/letsencrypt/live/${domain_name}/fullchain.pem",
+        "key": "/etc/letsencrypt/live/${domain_name}/privkey.pem",
+        "alpn": [
+            "http/1.1"
+        ]
+    }
+}
+EOL
 
-echo "================================================="
-echo "======================5=========================="
-echo "================================================="
-# 步骤5. 安装https证书
-sudo cat /etc/nginx/nginx.conf && \
-echo " $full_command " && \
-sudo eval $full_command && \
+# 创建systemd服务
+cat > /etc/systemd/system/trojan.service << EOL
+[Unit]
+Description=Trojan Proxy Service
+After=network.target
 
-echo "================================================="
-echo "======================6=========================="
-echo "================================================="
-# 步骤6. 停止nginx服务
-sudo systemctl stop nginx && \
+[Service]
+Type=simple
+ExecStart=/root/trojan/trojan -c /root/trojan/config.json
+Restart=always
+RestartSec=3
 
-echo "================================================="
-echo "======================7=========================="
-echo "================================================="
-# 步骤7. 还原nginx配置文件
-sudo mv /etc/nginx/sites-enabled/default /etc/nginx/sites-enabled/httpsBK.bk && \
-sudo cp /etc/nginx/sites-enabled/default2024.bk /etc/nginx/sites-enabled/default && \
-sudo mv /etc/nginx/nginx.conf.bk /etc/nginx/nginx.conf && \
+[Install]
+WantedBy=multi-user.target
+EOL
 
-echo "================================================="
-echo "======================8=========================="
-echo "================================================="
-# 步骤8. 再次启动nginx
-sudo systemctl start nginx && \
+# 还原Nginx配置为只监听80端口
+cat > /etc/nginx/sites-available/default << EOL
+server {
+    listen 80;
+    server_name ${domain_name};
+    root /var/www/html;
+    index index.html;
+    
+    location / {
+        try_files \$uri \$uri/ =404;
+    }
+}
+EOL
 
-echo "================================================="
-echo "======================9=========================="
-echo "================================================="
-# 步骤9. 安装Trojan
-sudo bash -c "$(curl -fsSL https://raw.githubusercontent.com/trojan-gfw/trojan-quickstart/master/trojan-quickstart.sh)" && \
+# 启动服务
+systemctl daemon-reload
+systemctl restart nginx
+systemctl start trojan
+systemctl enable trojan
 
-# 修改配置文件
-trojan_config="/usr/local/etc/trojan/config.json" && \
-sudo jq --arg password "$value_trojan_psw" --arg cert "$string_cert" --arg key "$string_key" \
-   '.password = [$password] | .ssl.cert = $cert | .ssl.key = $key' \
-   "$trojan_config" > "/tmp/config.json" && sudo mv /tmp/config.json "$trojan_config" && \
-
-echo "================================================="
-echo "======================10=========================="
-echo "================================================="
-# 步骤10 启用并启动 Trojan
-sudo systemctl enable trojan && \
-sudo systemctl start trojan && \
-
-echo "======================end=========================="
-# 打印
-echo "trojan url: $value_url" && \
-echo "trojan psw: $value_trojan_psw" && \
-sudo ss -tulnp | grep ':80' && \
-sudo ss -tulnp | grep ':443'
-echo "======================end=========================="
+echo "安装完成！"
+echo "域名: ${domain_name}"
+echo "密码: ${proxy_password}"
+echo "Trojan 已配置完成并设置为开机自启"
