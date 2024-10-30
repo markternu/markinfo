@@ -28,6 +28,7 @@ echo "================================================="
 # 步骤2. nginx conf
 nginx_conf="/etc/nginx/nginx.conf"
 cp /etc/nginx/sites-enabled/default /etc/nginx/sites-enabled/default2024.bk && \
+cp /etc/nginx/nginx.conf /etc/nginx/nginx.conf.bk && \
 
 # 使用sed命令替换所有localhost的值
 sudo sed -i -E "s/(server_name[[:space:]]+)[^;]+;/\1$value_url;/" "$nginx_conf" && \
@@ -57,11 +58,10 @@ sudo systemctl stop nginx && \
 echo "================================================="
 echo "======================7=========================="
 echo "================================================="
-# 步骤7. 更换nginx config
-# sudo mv /etc/nginx/nginx.conf /etc/nginx/nginxBK2024.conf && \
-
+# 步骤7. 还原nginx配置文件
 mv /etc/nginx/sites-enabled/default /etc/nginx/sites-enabled/httpsBK.bk && \
 cp /etc/nginx/sites-enabled/default2024.bk /etc/nginx/sites-enabled/default && \
+mv /etc/nginx/nginx.conf.bk /etc/nginx/nginx.conf && \
 
 echo "================================================="
 echo "======================8=========================="
