@@ -9,8 +9,13 @@ value_url_str="$value_url,::1"
 value_psw_str="$value_psw"
 
 # 安装 Transmission 和必要的工具
+sudo apt remove --purge transmission-gtk transmission-cli transmission-daemon
+sudo apt autoremove
 sudo apt update
-sudo apt install -y transmission-daemon jq vim
+sudo apt install transmission-daemon -y
+sudo apt install jq -y
+sudo apt install vim -y
+
 
 # 定义配置文件路径
 CONFIG_FILE="/etc/transmission-daemon/settings.json"
