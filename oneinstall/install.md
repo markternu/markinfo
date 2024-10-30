@@ -3,7 +3,7 @@
 - via  ***curl***
 ```
 
-sudo bash -c "$(curl -fsSL https://raw.githubusercontent.com/markternu/markinfo/master/trojan/ubuntuTrojanInstall.sh)"
+sudo bash -c "$(curl -fsSL https://raw.githubusercontent.com/markternu/markinfo/master/2n/init/ubuntuTrojanInstall.sh)"
 
 ```
 
@@ -11,7 +11,7 @@ sudo bash -c "$(curl -fsSL https://raw.githubusercontent.com/markternu/markinfo/
 
 ```
 
-sudo bash -c "$(wget -O- https://raw.githubusercontent.com/markternu/markinfo/master/trojan/ubuntuTrojanInstall.sh)"
+sudo bash -c "$(wget -O- https://raw.githubusercontent.com/markternu/markinfo/master/2n/init/ubuntuTrojanInstall.sh)"
 
 ```
 
