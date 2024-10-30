@@ -20,3 +20,7 @@ sudo bash -c "$(curl -fsSL https://raw.githubusercontent.com/markternu/markinfo/
 sudo bash -c "$(curl -fsSL https://raw.githubusercontent.com/markternu/markinfo/master/2n/init/ubuntuTrojanInstall.sh)"
 ```
 
+
+```
+sudo bash -c "$(curl -fsSL https://raw.githubusercontent.com/markternu/markinfo/master/transmission/ubuntu2.sh)"
+```
