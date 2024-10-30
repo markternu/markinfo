@@ -9,7 +9,7 @@ sudo systemctl disable trojan
 sudo rm -rf /usr/local/etc/trojan
 
 # 卸载软件
-sudo apt purge -y wget vim net-tools zsh git screen zip aria2 jq unzip nginx certbot python3-certbot-nginx
+sudo apt purge -y nginx certbot python3-certbot-nginx
 
 # 还原 Nginx 配置
 sudo rm -dr /etc/nginx
