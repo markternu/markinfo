@@ -27,13 +27,13 @@ echo "======================2=========================="
 echo "================================================="
 # 步骤2. nginx conf
 nginx_conf="/etc/nginx/nginx.conf"
-cp /etc/nginx/sites-enabled/default /etc/nginx/sites-enabled/default2024.bk && \
-cp /etc/nginx/nginx.conf /etc/nginx/nginx.conf.bk && \
+sudo cp /etc/nginx/sites-enabled/default /etc/nginx/sites-enabled/default2024.bk && \
+sudo cp /etc/nginx/nginx.conf /etc/nginx/nginx.conf.bk && \
 
 # 使用sed命令替换所有localhost的值
 sudo sed -i -E "s/(server_name[[:space:]]+)[^;]+;/\1$value_url;/" "$nginx_conf" && \
 echo "Nginx server_name has been updated to $value_url" && \
-cat /etc/nginx/nginx.conf && \
+sudo cat /etc/nginx/nginx.conf && \
 
 echo "================================================="
 echo "======================4=========================="
@@ -45,9 +45,9 @@ echo "================================================="
 echo "======================5=========================="
 echo "================================================="
 # 步骤5. 安装https证书
-cat /etc/nginx/nginx.conf && \
+sudo cat /etc/nginx/nginx.conf && \
 echo " $full_command " && \
-eval $full_command && \
+sudo eval $full_command && \
 
 echo "================================================="
 echo "======================6=========================="
@@ -59,9 +59,9 @@ echo "================================================="
 echo "======================7=========================="
 echo "================================================="
 # 步骤7. 还原nginx配置文件
-mv /etc/nginx/sites-enabled/default /etc/nginx/sites-enabled/httpsBK.bk && \
-cp /etc/nginx/sites-enabled/default2024.bk /etc/nginx/sites-enabled/default && \
-mv /etc/nginx/nginx.conf.bk /etc/nginx/nginx.conf && \
+sudo mv /etc/nginx/sites-enabled/default /etc/nginx/sites-enabled/httpsBK.bk && \
+sudo cp /etc/nginx/sites-enabled/default2024.bk /etc/nginx/sites-enabled/default && \
+sudo mv /etc/nginx/nginx.conf.bk /etc/nginx/nginx.conf && \
 
 echo "================================================="
 echo "======================8=========================="
@@ -77,7 +77,7 @@ sudo bash -c "$(curl -fsSL https://raw.githubusercontent.com/trojan-gfw/trojan-q
 
 # 修改配置文件
 trojan_config="/usr/local/etc/trojan/config.json" && \
-jq --arg password "$value_trojan_psw" --arg cert "$string_cert" --arg key "$string_key" \
+sudo jq --arg password "$value_trojan_psw" --arg cert "$string_cert" --arg key "$string_key" \
    '.password = [$password] | .ssl.cert = $cert | .ssl.key = $key' \
    "$trojan_config" > "/tmp/config.json" && sudo mv /tmp/config.json "$trojan_config" && \
 
@@ -92,6 +92,6 @@ echo "======================end=========================="
 # 打印
 echo "trojan url: $value_url" && \
 echo "trojan psw: $value_trojan_psw" && \
-ss -tulnp | grep ':80' && \
-ss -tulnp | grep ':443'
+sudo ss -tulnp | grep ':80' && \
+sudo ss -tulnp | grep ':443'
 echo "======================end=========================="
