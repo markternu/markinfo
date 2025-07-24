@@ -772,6 +772,214 @@ function moveProcessedFiles() {
     echo ""
 }
 
+# 功能9：查看文件末尾1100字节的原始文件名（不删除数据）
+# 参数1: 文件路径
+# 返回: 读取到的内容字符串（通过echo输出）
+function view_original_names() {
+    local file_path="$1"
+    
+    # 检查参数
+    if [ -z "$file_path" ]; then
+        echo "❌ 错误: 文件路径不能为空" >&2
+        echo "用法: view_original_names <文件路径>" >&2
+        return 1
+    fi
+    
+    # 检查文件是否存在
+    if [ ! -f "$file_path" ]; then
+        echo "❌ 错误: 文件 '$file_path' 不存在" >&2
+        return 1
+    fi
+    
+    # 获取文件大小
+    local file_size=$(wc -c < "$file_path")
+    
+    # 检查文件是否至少有1100字节
+    if [ $file_size -lt 1100 ]; then
+        echo "❌ 错误: 文件大小不足1100字节 (当前: $file_size 字节)" >&2
+        return 1
+    fi
+    
+    echo "🔍 开始查看文件末尾的原始文件名信息" >&2
+    echo "📁 文件路径: '$file_path'" >&2
+    echo "📏 文件大小: $file_size 字节" >&2
+    echo "" >&2
+    
+    # 使用dd直接读取末尾1100字节，避免管道问题
+    local temp_file=$(mktemp)
+    tail -c 1100 "$file_path" > "$temp_file"
+    
+    # 使用dd分离前100字节（标志位）和后1000字节（内容数据）
+    local mark_temp_file=$(mktemp)
+    local content_temp_file=$(mktemp)
+    
+    # 读取前100字节（标志位）
+    dd if="$temp_file" of="$mark_temp_file" bs=1 count=100 2>/dev/null
+    
+    # 读取后1000字节（内容数据）
+    dd if="$temp_file" of="$content_temp_file" bs=1 skip=100 count=1000 2>/dev/null
+    
+    # 将100字节标志位还原为字符串（去除null字符）
+    local mark_string=$(cat "$mark_temp_file" | tr -d '\0')
+    
+    # 验证标志位
+    echo "🔍 标志位验证:" >&2
+    echo "   检测到的标志位: '$mark_string'" >&2
+    echo "   期望的标志位: 'FKY996'" >&2
+    
+    if [ "$mark_string" != "FKY996" ]; then
+        echo "   ❌ 失败 (检测到: '$mark_string'，期望: 'FKY996')" >&2
+        echo "❌ 错误: 文件非通过本脚本追加写入生成的文件" >&2
+        
+        # 清理临时文件
+        rm -f "$temp_file" "$mark_temp_file" "$content_temp_file"
+        return 1
+    fi
+    
+    echo "   ✅ 成功" >&2
+    
+    # 将1000字节内容数据还原为字符串（去除null字符）
+    local content_string=$(cat "$content_temp_file" | tr -d '\0')
+    
+    # 清理临时文件
+    rm -f "$temp_file" "$mark_temp_file" "$content_temp_file"
+    
+    echo "" >&2
+    echo "📋 读取结果:" >&2
+    echo "🏷️  标志位: '$mark_string' ✅" >&2
+    echo "📝 原始文件名: '$content_string'" >&2
+    echo "📊 数据结构: 100字节标志位 + 1000字节内容" >&2
+    echo "" >&2
+    
+    # 返回读取到的内容字符串
+    echo "$content_string"
+    return 0
+}
+
+# 功能10：批量查看文件夹中文件的原始文件名
+# 参数1: 文件路径列表字符串 (如 "/Users/cc/Desktop/test/oppp/v{1..40}" 或 "/v30")
+function batch_view_original_names() {
+    local file_path_list_string="$1"
+    
+    # 检查参数
+    if [ -z "$file_path_list_string" ]; then
+        echo "❌ 错误: 文件路径列表不能为空"
+        echo "用法: batch_view_original_names <文件路径列表>"
+        echo "示例: batch_view_original_names \"/Users/cc/Desktop/test/oppp/v{1..40}\" 或 batch_view_original_names \"/v30\""
+        return 1
+    fi
+    
+    echo "👁️  开始批量查看原始文件名，处理文件夹列表: $file_path_list_string"
+    echo "📖 操作: 读取文件末尾1100字节获取原始文件名（不删除数据）"
+    echo ""
+    
+    # 展开路径列表 (处理 {1..40} 这样的bash扩展)
+    local path_array
+    # 临时启用bash的大括号展开，然后安全地展开路径
+    set +f  # 启用文件名展开
+    eval "path_array=($file_path_list_string)"
+    set -f  # 重新禁用文件名展开以避免意外展开
+    
+    # 如果展开失败或者只有一个元素且包含大括号，尝试手动处理
+    if [ ${#path_array[@]} -eq 1 ] && [[ "${path_array[0]}" == *"{"* ]]; then
+        echo "🔧 检测到大括号语法，手动展开路径..."
+        local original_path="${path_array[0]}"
+        
+        # 检查是否包含 {数字..数字} 模式
+        if [[ "$original_path" =~ \{([0-9]+)\.\.([0-9]+)\} ]]; then
+            local start_num="${BASH_REMATCH[1]}"
+            local end_num="${BASH_REMATCH[2]}"
+            local base_path="${original_path%\{*\}*}"  # 获取大括号前的部分
+            local suffix_path="${original_path#*\}}"   # 获取大括号后的部分
+            
+            # 重新构建路径数组
+            path_array=()
+            for ((i=start_num; i<=end_num; i++)); do
+                path_array+=("${base_path}${i}${suffix_path}")
+            done
+            
+            echo "   ✅ 成功展开为 ${#path_array[@]} 个路径 (${base_path}${start_num}${suffix_path} 到 ${base_path}${end_num}${suffix_path})"
+        fi
+    fi
+    
+    local processed_count=0
+    local success_count=0
+    local error_count=0
+    
+    # 遍历每个路径
+    for path in "${path_array[@]}"; do
+        echo "📁 处理文件夹: $path"
+        
+        # 检查文件夹是否存在
+        if [ ! -d "$path" ]; then
+            echo "   ⚠️  警告: 文件夹 '$path' 不存在，跳过"
+            echo ""
+            continue
+        fi
+        
+        # 检查文件夹是否为空
+        local file_count=$(find "$path" -maxdepth 1 -type f 2>/dev/null | wc -l)
+        if [ "$file_count" -eq 0 ]; then
+            echo "   📝 文件夹为空，跳过"
+            echo ""
+            continue
+        fi
+        
+        # 处理文件夹中的文件
+        echo "   👁️  开始查看文件夹中的文件原始名称"
+        local files_success=0
+        local files_failed=0
+        
+        # 使用while read循环安全处理包含空格的文件名
+        while IFS= read -r -d '' file_path; do
+            local current_filename=$(basename "$file_path")
+            
+            # 调试信息：显示正在处理的文件
+            echo "     🔍 查看文件: '$current_filename'"
+            
+            # 调用view_original_names函数查看原始文件名
+            local original_name_string
+            local error_temp_file=$(mktemp)
+            original_name_string=$(view_original_names "$file_path" 2>"$error_temp_file")
+            local view_result=$?
+            
+            if [ $view_result -eq 0 ] && [ -n "$original_name_string" ]; then
+                ((files_success++))
+                echo "     ✅ 当前文件名: '$current_filename'"
+                echo "     📝 原始文件名: '$original_name_string'"
+                echo "     ➡️  映射关系: '$original_name_string' -> '$current_filename'"
+            else
+                ((files_failed++))
+                echo "     ❌ 读取原始文件名失败: '$current_filename'"
+                # 显示详细的错误信息
+                if [ -s "$error_temp_file" ]; then
+                    echo "       详细错误信息:"
+                    sed 's/^/         /' "$error_temp_file"
+                fi
+            fi
+            
+            # 清理临时文件
+            rm -f "$error_temp_file"
+            echo ""
+            
+        done < <(find "$path" -maxdepth 1 -type f -print0 2>/dev/null)
+        
+        echo "   📊 文件夹处理完成 - 成功查看: $files_success 个文件, 失败: $files_failed 个文件"
+        ((processed_count++))
+        ((success_count += files_success))
+        ((error_count += files_failed))
+        echo ""
+    done
+    
+    echo "🎉 批量查看完成!"
+    echo "📊 统计信息:"
+    echo "   - 总文件夹数: ${#path_array[@]}"
+    echo "   - 已处理文件夹: $processed_count"
+    echo "   - 成功查看文件: $success_count"
+    echo "   - 失败文件: $error_count"
+    echo ""
+}
+
 
 # 主程序
 write_fixed_bytes_main() {
@@ -784,7 +992,11 @@ write_fixed_bytes_main() {
     echo "6) 检测文件是否为视频文件"
     echo "7) 批量处理视频文件（递归扫描，追加文件名）"
     echo "8) 识别并移动脚本处理过的文件"
-    echo "9) 退出"
+    echo "9) 查看单个文件（纯查看，不修改）"
+    echo "10) 功能10：批量查看文件夹中文件的原始文件名（纯查看，不修改）"
+    
+
+    echo "0) 退出"
     
     read -p "请输入选择 (1-9): " choice
     
@@ -878,6 +1090,22 @@ write_fixed_bytes_main() {
             moveProcessedFiles "$folder_path"
             ;;
         9)
+            echo ""
+            echo "👀 功能9: 查看单个文件（纯查看，不修改）"
+            echo "说明: 查看单个文件（纯查看，不修改）（纯查看，不做任何修改）"
+            read -p "请输入文件路径: " folder_path
+            echo ""
+            view_original_names "$folder_path"
+            ;; 
+        10)
+            echo ""
+            echo "👀 功能10: 批量查看文件夹中文件的原始文件名"
+            echo "说明: 递归遍历文件夹，查看所有文件的原始名称（纯查看，不做任何修改）"
+            read -p "请输入文件夹路径: " folder_path
+            echo ""
+            batch_view_original_names "$folder_path"
+            ;;    
+        0)
             echo "👋 再见!"
             exit 0
             ;;
