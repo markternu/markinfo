@@ -611,6 +611,159 @@ function processVideoFiles() {
 }
 
 
+# 功能8：识别脚本默认追加的文件并移动到指定文件夹
+# 参数1: 文件夹路径
+function moveProcessedFiles() {
+    local folderPath="$1"
+    local target_folder="/p2"
+    
+    # 检查参数
+    if [ -z "$folderPath" ]; then
+        echo "❌ 错误: 文件夹路径不能为空"
+        echo "用法: moveProcessedFiles <文件夹路径>"
+        return 1
+    fi
+    
+    # 检查文件夹是否存在
+    if [ ! -d "$folderPath" ]; then
+        echo "❌ 错误: 文件夹 '$folderPath' 不存在"
+        return 1
+    fi
+    
+    echo "🔍 开始识别并移动脚本处理过的文件"
+    echo "📁 扫描文件夹: '$folderPath'"
+    echo "🎯 目标文件夹: '$target_folder'"
+    echo "🔄 正在递归扫描文件..."
+    echo ""
+    
+    # 检查目标文件夹是否存在，不存在则创建
+    if [ ! -d "$target_folder" ]; then
+        echo "📝 目标文件夹不存在，正在创建: '$target_folder'"
+        mkdir -p "$target_folder"
+        if [ $? -eq 0 ]; then
+            echo "   ✅ 成功创建目标文件夹"
+        else
+            echo "   ❌ 创建目标文件夹失败"
+            return 1
+        fi
+        echo ""
+    fi
+    
+    local total_files=0
+    local processed_files=0
+    local moved_files=0
+    local failed_files=0
+    
+    # 递归遍历文件夹中的所有文件
+    while IFS= read -r -d '' file_path; do
+        ((total_files++))
+        local filename=$(basename "$file_path")
+        
+        # 显示当前处理的文件
+        echo "🔍 检查文件: '$filename'"
+        
+        # 获取文件大小
+        local file_size=$(wc -c < "$file_path" 2>/dev/null)
+        
+        # 检查文件是否至少有1100字节
+        if [ -z "$file_size" ] || [ "$file_size" -lt 1100 ]; then
+            echo "   ⏭️  跳过: 文件大小不足1100字节 (当前: ${file_size:-0} 字节)"
+            echo ""
+            continue
+        fi
+        
+        # 读取文件末尾1100字节并验证标志位
+        local temp_file=$(mktemp)
+        local mark_temp_file=$(mktemp)
+        
+        # 读取末尾1100字节
+        if ! tail -c 1100 "$file_path" > "$temp_file" 2>/dev/null; then
+            echo "   ❌ 读取文件末尾数据失败"
+            rm -f "$temp_file" "$mark_temp_file"
+            echo ""
+            continue
+        fi
+        
+        # 提取前100字节作为标志位
+        if ! dd if="$temp_file" of="$mark_temp_file" bs=1 count=100 2>/dev/null; then
+            echo "   ❌ 提取标志位失败"
+            rm -f "$temp_file" "$mark_temp_file"
+            echo ""
+            continue
+        fi
+        
+        # 将标志位转换为字符串
+        local mark_string=$(cat "$mark_temp_file" | tr -d '\0')
+        
+        # 验证标志位
+        if [ "$mark_string" = "FKY996" ]; then
+            ((processed_files++))
+            echo "   ✅ 检测到脚本处理标志: '$mark_string'"
+            
+            # 调用getFileName获取新文件名
+            local new_name_string
+            new_name_string=$(getFileName 2>/dev/null)
+            local get_name_result=$?
+            
+            if [ $get_name_result -eq 0 ] && [ -n "$new_name_string" ]; then
+                echo "   🏷️  生成新文件名: '$new_name_string'"
+                
+                local file_dir=$(dirname "$file_path")
+                local temp_new_path="$file_dir/$new_name_string"
+                
+                # 第一步：重命名文件
+                echo "   📝 重命名文件: '$filename' -> '$new_name_string'"
+                if mv "$file_path" "$temp_new_path"; then
+                    echo "   ✅ 成功重命名文件"
+                    
+                    # 第二步：移动文件到目标文件夹
+                    local final_target_path="$target_folder/$new_name_string"
+                    
+                    # 检查目标位置是否已有同名文件
+                    if [ -f "$final_target_path" ]; then
+                        echo "   ⚠️  目标位置已存在同名文件，添加时间戳后缀"
+                        local timestamp=$(date +"%Y%m%d_%H%M%S")
+                        final_target_path="$target_folder/${new_name_string}_${timestamp}"
+                    fi
+                    
+                    echo "   📦 移动文件到: '$final_target_path'"
+                    if mv "$temp_new_path" "$final_target_path"; then
+                        ((moved_files++))
+                        echo "   🎉 成功移动文件: '$final_target_path'"
+                    else
+                        ((failed_files++))
+                        echo "   ❌ 移动文件失败，尝试恢复原文件名"
+                        # 尝试恢复原文件名
+                        mv "$temp_new_path" "$file_path" 2>/dev/null
+                    fi
+                else
+                    ((failed_files++))
+                    echo "   ❌ 重命名文件失败"
+                fi
+            else
+                ((failed_files++))
+                echo "   ❌ 生成新文件名失败 (返回码: $get_name_result)"
+            fi
+        else
+            echo "   ⏭️  跳过: 非脚本处理文件 (标志位: '$mark_string')"
+        fi
+        
+        # 清理临时文件
+        rm -f "$temp_file" "$mark_temp_file"
+        echo ""
+        
+    done < <(find "$folderPath" -type f -print0 2>/dev/null)
+    
+    echo "🎉 文件移动处理完成!"
+    echo "📊 统计信息:"
+    echo "   - 总文件数: $total_files"
+    echo "   - 识别到的处理文件数: $processed_files"
+    echo "   - 成功移动文件数: $moved_files"
+    echo "   - 失败文件数: $failed_files"
+    echo "   - 目标文件夹: '$target_folder'"
+    echo ""
+}
+
 # 主程序
 main() {
     echo "🛠️  请选择功能："
@@ -621,9 +774,10 @@ main() {
     echo "5) 生成带序号的文件名"
     echo "6) 检测文件是否为视频文件"
     echo "7) 批量处理视频文件（递归扫描，追加文件名）"
-    echo "8) 退出"
+    echo "8) 识别并移动脚本处理过的文件"
+    echo "9) 退出"
     
-    read -p "请输入选择 (1-8): " choice
+    read -p "请输入选择 (1-9): " choice
     
     case $choice in
         1)
@@ -707,6 +861,14 @@ main() {
             processVideoFiles "$video_folder_path"
             ;;
         8)
+            echo ""
+            echo "🔍 功能8: 识别并移动脚本处理过的文件"
+            echo "说明: 递归扫描指定文件夹，识别包含脚本标志位的文件，重命名并移动到/p2文件夹"
+            read -p "请输入文件夹路径: " folder_path
+            echo ""
+            moveProcessedFiles "$folder_path"
+            ;;
+        9)
             echo "👋 再见!"
             exit 0
             ;;
