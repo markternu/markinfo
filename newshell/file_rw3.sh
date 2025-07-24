@@ -436,14 +436,14 @@ function getFileName() {
     local filePrefix="fgg"
     local indexFile="/indexFXY"
     
-    echo "🔢 开始生成文件名..."
+    echo "🔢 开始生成文件名..." >&2
     
     # 检查索引文件是否存在，不存在则创建并初始化为1
     if [ ! -f "$indexFile" ]; then
-        echo "📝 索引文件不存在，创建并初始化: $indexFile"
+        echo "📝 索引文件不存在，创建并初始化: $indexFile" >&2
         echo "1" > "$indexFile"
         if [ $? -eq 0 ]; then
-            echo "   ✅ 成功创建索引文件"
+            echo "   ✅ 成功创建索引文件" >&2
         else
             echo "   ❌ 创建索引文件失败" >&2
             return 1
@@ -460,26 +460,26 @@ function getFileName() {
     # 验证索引值是否为数字
     if ! [[ "$index" =~ ^[0-9]+$ ]]; then
         echo "❌ 错误: 索引文件中的值不是有效数字: '$index'" >&2
-        echo "🔧 重置索引文件为1"
+        echo "🔧 重置索引文件为1" >&2
         echo "1" > "$indexFile"
         index=1
     fi
     
-    echo "📖 读取的索引值: $index"
+    echo "📖 读取的索引值: $index" >&2
     
     # 生成文件名
     local fileNameString="${filePrefix}${index}"
-    echo "🏷️  生成的文件名: '$fileNameString'"
+    echo "🏷️  生成的文件名: '$fileNameString'" >&2
     
     # 索引值加一并写回文件
     ((index++))
     if echo "$index" > "$indexFile"; then
-        echo "📝 索引值已更新为: $index"
+        echo "📝 索引值已更新为: $index" >&2
     else
         echo "⚠️  警告: 更新索引文件失败，但仍返回生成的文件名" >&2
     fi
     
-    # 返回生成的文件名
+    # 返回生成的文件名（输出到标准输出）
     echo "$fileNameString"
     return 0
 }
