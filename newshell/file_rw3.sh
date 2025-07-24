@@ -764,6 +764,99 @@ function moveProcessedFiles() {
     echo ""
 }
 
+
+# 功能9：纯查看文件夹下所有文件的原始名称（不做任何修改操作）
+# 参数1: 文件夹路径
+function view_original_names() {
+    local folder_path="$1"
+    
+    # 检查参数
+    if [ -z "$folder_path" ]; then
+        echo "❌ 错误: 文件夹路径不能为空"
+        echo "用法: view_original_names <文件夹路径>"
+        echo "示例: view_original_names \"/Users/cc/Desktop/test/oppp\""
+        return 1
+    fi
+    
+    # 检查文件夹是否存在
+    if [ ! -d "$folder_path" ]; then
+        echo "❌ 错误: 文件夹 '$folder_path' 不存在"
+        return 1
+    fi
+    
+    echo "👀 开始查看文件夹原始名称: $folder_path"
+    echo "🔍 递归遍历所有文件..."
+    echo ""
+    
+    local total_files=0
+    local script_files=0
+    local non_script_files=0
+    
+    # 递归遍历文件夹下的所有文件
+    while IFS= read -r -d '' file_path; do
+        ((total_files++))
+        local filename=$(basename "$file_path")
+        local relative_path=$(echo "$file_path" | sed "s|^$folder_path/||")
+        
+        # 检查文件大小是否至少有1100字节
+        local file_size=$(wc -c < "$file_path" 2>/dev/null)
+        if [ $file_size -lt 1100 ]; then
+            echo "📄 $relative_path"
+            echo "   ⚠️  文件大小不足1100字节 (当前: $file_size 字节)，非脚本生成文件"
+            ((non_script_files++))
+            echo ""
+            continue
+        fi
+        
+        # 读取末尾1100字节
+        local last_1100_bytes=$(tail -c 1100 "$file_path" 2>/dev/null)
+        if [ $? -ne 0 ]; then
+            echo "📄 $relative_path"
+            echo "   ❌ 无法读取文件末尾数据"
+            ((non_script_files++))
+            echo ""
+            continue
+        fi
+        
+        # 分离前100字节（标志位）和后1000字节（内容数据）
+        local mark_bytes=$(echo -n "$last_1100_bytes" | head -c 100)
+        local content_bytes=$(echo -n "$last_1100_bytes" | tail -c 1000)
+        
+        # 将100字节标志位还原为字符串
+        local mark_string=$(echo -n "$mark_bytes" | tr -d '\0')
+        
+        # 验证标志位
+        if [ "$mark_string" = "FKY996" ]; then
+            # 标志位验证正确
+            ((script_files++))
+            
+            # 将1000字节内容数据还原为字符串
+            local content_string=$(echo -n "$content_bytes" | tr -d '\0')
+            
+            echo "📄 $relative_path"
+            echo "   🏷️  标志位验证: ✅ 通过 (FKY996)"
+            echo "   📝 文件名: '$filename' 原始名称是 -> '$content_string'"
+        else
+            # 标志位验证失败
+            ((non_script_files++))
+            echo "📄 $relative_path"
+            echo "   🏷️  标志位验证: ❌ 失败 (检测到: '$mark_string'，期望: 'FKY996')"
+            echo "   📝 非脚本生成文件，无原始名称信息"
+        fi
+        
+        echo ""
+        
+    done < <(find "$folder_path" -type f -print0)
+    
+    echo "🎉 查看完成!"
+    echo "📊 统计信息:"
+    echo "   - 总文件数: $total_files"
+    echo "   - 脚本生成文件: $script_files (包含原始名称信息)"
+    echo "   - 非脚本文件: $non_script_files (无原始名称信息)"
+    echo ""
+}
+
+
 # 主程序
 main() {
     echo "🛠️  请选择功能："
@@ -775,7 +868,8 @@ main() {
     echo "6) 检测文件是否为视频文件"
     echo "7) 批量处理视频文件（递归扫描，追加文件名）"
     echo "8) 识别并移动脚本处理过的文件"
-    echo "9) 退出"
+    echo "9) 查看文件夹下所有文件的原始名称（纯查看，不修改）"
+    echo "0) 退出"
     
     read -p "请输入选择 (1-9): " choice
     
@@ -869,6 +963,14 @@ main() {
             moveProcessedFiles "$folder_path"
             ;;
         9)
+            echo ""
+            echo "👀 功能9: 查看文件夹下所有文件的原始名称"
+            echo "说明: 递归遍历文件夹，查看所有文件的原始名称（纯查看，不做任何修改）"
+            read -p "请输入文件夹路径: " folder_path
+            echo ""
+            view_original_names "$folder_path"
+            ;;    
+        0)
             echo "👋 再见!"
             exit 0
             ;;
