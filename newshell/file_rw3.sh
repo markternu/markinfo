@@ -1,6 +1,6 @@
 #!/bin/bash
 
-# 功能1：向文件末尾追加固定1000字节的数据
+# 功能1：向文件末尾追加固定1100字节的数据（100字节标志位 + 1000字节内容）
 # 参数1: 要写入的字符串
 # 参数2: 目标文件路径
 function write_fixed_bytes() {
@@ -14,35 +14,150 @@ function write_fixed_bytes() {
         return 1
     fi
     
-    # 创建一个临时文件来构造1000字节的数据
-    local temp_file=$(mktemp)
+    # 标志字符串
+    local mark_string="FKY996"
     
-    # 将字符串写入临时文件
-    echo -n "$name" > "$temp_file"
+    echo "🔧 开始写入数据到文件: '$file_path'"
+    
+    # 第一步：写入100字节的标志位
+    echo "📝 第一步: 写入100字节标志位 '$mark_string'"
+    
+    # 获取标志字符串的字节数
+    local mark_size=${#mark_string}
+    echo "   标志字符串长度: $mark_size 字节"
+    
+    # 计算标志位需要填充的字节数
+    local mark_padding_size=$((100 - mark_size))
+    
+    if [ $mark_padding_size -lt 0 ]; then
+        # 如果标志字符串超过100字节，截断到100字节
+        echo "   ⚠️  警告: 标志字符串超过100字节，将被截断"
+        printf "%.100s" "$mark_string" >> "$file_path"
+    else
+        # 如果标志字符串不足100字节，用空字符(\0)填充
+        echo "   填充 $mark_padding_size 个null字节"
+        printf "%s" "$mark_string" >> "$file_path"
+        # 使用printf填充剩余字节为0
+        printf "%*s" $mark_padding_size "" | tr ' ' '\0' >> "$file_path"
+    fi
+    
+    echo "   ✅ 标志位写入完成 (100字节)"
+    
+    # 第二步：写入1000字节的内容数据
+    echo "📝 第二步: 写入1000字节内容数据 '$name'"
     
     # 获取当前字符串的字节数
-    local current_size=$(wc -c < "$temp_file")
+    local current_size=${#name}
+    echo "   内容字符串长度: $current_size 字节"
     
     # 计算需要填充的字节数
     local padding_size=$((1000 - current_size))
     
     if [ $padding_size -lt 0 ]; then
         # 如果字符串超过1000字节，截断到1000字节
-        echo "⚠️  警告: 输入字符串超过1000字节，将被截断"
-        head -c 1000 "$temp_file" >> "$file_path"
+        echo "   ⚠️  警告: 输入字符串超过1000字节，将被截断"
+        printf "%.1000s" "$name" >> "$file_path"
     else
         # 如果字符串不足1000字节，用空字符(\0)填充
-        cat "$temp_file" >> "$file_path"
-        # 使用dd填充剩余字节为0
-        dd if=/dev/zero bs=1 count=$padding_size >> "$file_path" 2>/dev/null
+        echo "   填充 $padding_size 个null字节"
+        printf "%s" "$name" >> "$file_path"
+        # 使用printf填充剩余字节为0
+        printf "%*s" $padding_size "" | tr ' ' '\0' >> "$file_path"
     fi
     
-    # 清理临时文件
-    rm -f "$temp_file"
+    echo "   ✅ 内容数据写入完成 (1000字节)"
     
-    echo "✅ 成功向文件 '$file_path' 末尾写入1000字节数据"
-    echo "📝 写入内容: '$name'"
-    echo "📊 文件当前大小: $(wc -c < "$file_path") 字节"
+    echo "🎉 总计写入完成!"
+    echo "✅ 成功向文件 '$file_path' 末尾写入1100字节数据"
+    echo "   📊 结构: 100字节标志位 + 1000字节内容"
+    echo "   🏷️  标志位: '$mark_string'"
+    echo "   📝 写入内容: '$name'"
+    echo "   📊 文件当前大小: $(wc -c < "$file_path") 字节"
+}
+
+# 功能2：读取文件末尾1100字节并还原为字符串，然后删除这1100字节
+# 参数1: 文件路径
+# 返回: 读取到的内容字符串（通过echo输出）
+function read_and_remove_fixed_bytes() {
+    local file_path="$1"
+    
+    # 检查参数
+    if [ -z "$file_path" ]; then
+        echo "❌ 错误: 文件路径不能为空" >&2
+        echo "用法: read_and_remove_fixed_bytes <文件路径>" >&2
+        return 1
+    fi
+    
+    # 检查文件是否存在
+    if [ ! -f "$file_path" ]; then
+        echo "❌ 错误: 文件 '$file_path' 不存在" >&2
+        return 1
+    fi
+    
+    # 获取文件大小
+    local file_size=$(wc -c < "$file_path")
+    
+    # 检查文件是否至少有1100字节
+    if [ $file_size -lt 1100 ]; then
+        echo "❌ 错误: 文件大小不足1100字节 (当前: $file_size 字节)" >&2
+        return 1
+    fi
+    
+    # 使用dd直接读取末尾1100字节，避免管道问题
+    local temp_file=$(mktemp)
+    tail -c 1100 "$file_path" > "$temp_file"
+    
+    # 使用dd分离前100字节（标志位）和后1000字节（内容数据）
+    local mark_temp_file=$(mktemp)
+    local content_temp_file=$(mktemp)
+    
+    # 读取前100字节（标志位）
+    dd if="$temp_file" of="$mark_temp_file" bs=1 count=100 2>/dev/null
+    
+    # 读取后1000字节（内容数据）
+    dd if="$temp_file" of="$content_temp_file" bs=1 skip=100 count=1000 2>/dev/null
+    
+    # 将100字节标志位还原为字符串
+    local mark_string=$(cat "$mark_temp_file" | tr -d '\0')
+    
+    # 验证标志位
+    if [ "$mark_string" != "FKY996" ]; then
+        echo "❌ 错误: 文件非通过本脚本追加写入生成的文件，不能通过本功能读取并切除文件末尾数据" >&2
+        echo "🔍 检测到的标志位: '$mark_string' (期望: 'FKY996')" >&2
+        # 清理临时文件
+        rm -f "$temp_file" "$mark_temp_file" "$content_temp_file"
+        return 1
+    fi
+    
+    # 将1000字节内容数据还原为字符串
+    local content_string=$(cat "$content_temp_file" | tr -d '\0')
+    
+    # 清理临时文件
+    rm -f "$temp_file" "$mark_temp_file" "$content_temp_file"
+    
+    # 计算新文件大小（移除末尾1100字节）
+    local new_size=$((file_size - 1100))
+    
+    # 创建临时文件
+    local new_temp_file=$(mktemp)
+    
+    # 将原文件除了末尾1100字节的部分复制到临时文件
+    head -c $new_size "$file_path" > "$new_temp_file"
+    
+    # 用临时文件替换原文件
+    mv "$new_temp_file" "$file_path"
+    
+    # 当在交互模式下调用时显示详细信息
+    if [ "${FUNCNAME[1]}" = "main" ]; then
+        echo "✅ 成功读取并移除文件 '$file_path' 末尾1100字节" >&2
+        echo "🏷️  验证标志位: '$mark_string' ✓" >&2
+        echo "📝 读取到的内容: '$content_string'" >&2
+        echo "📊 文件新大小: $(wc -c < "$file_path") 字节" >&2
+    fi
+    
+    # 返回读取到的内容字符串
+    echo "$content_string"
+    return 0
 }
 
 # 功能3：遍历文件夹并处理文件
@@ -191,7 +306,7 @@ function restore_file_names() {
     fi
     
     echo "🔄 开始还原文件名，处理文件夹列表: $file_path_list_string"
-    echo "📖 操作: 读取文件末尾1000字节作为新文件名"
+    echo "📖 操作: 读取文件末尾1100字节作为新文件名"
     echo ""
     
     # 展开路径列表 (处理 {1..40} 这样的bash扩展)
@@ -258,9 +373,10 @@ function restore_file_names() {
             # 调试信息：显示正在处理的文件
             echo "   🔍 处理文件: '$original_filename'"
             
-            # 调用功能2读取末尾1000字节并获取字符串
+            # 调用功能2读取末尾1100字节并获取字符串
             local get_name_string
-            get_name_string=$(read_and_remove_fixed_bytes "$file_path" 2>/dev/null)
+            local error_temp_file=$(mktemp)
+            get_name_string=$(read_and_remove_fixed_bytes "$file_path" 2>"$error_temp_file")
             local read_result=$?
             
             if [ $read_result -eq 0 ] && [ -n "$get_name_string" ]; then
@@ -285,9 +401,18 @@ function restore_file_names() {
                     ((files_failed++))
                     echo "   ❌ 重命名失败: '$original_filename'"
                 fi
+                # 清理临时文件
+                rm -f "$error_temp_file"
             else
                 ((files_failed++))
                 echo "   ❌ 读取末尾数据失败或数据为空: '$original_filename'"
+                echo "     调试信息: read_result=$read_result, get_name_string='$get_name_string'"
+                # 显示详细的错误信息
+                if [ -s "$error_temp_file" ]; then
+                    echo "     详细错误信息:"
+                    sed 's/^/       /' "$error_temp_file"
+                fi
+                rm -f "$error_temp_file"
             fi
             
         done < <(find "$path" -maxdepth 1 -type f -print0 2>/dev/null)
@@ -304,69 +429,11 @@ function restore_file_names() {
     echo ""
 }
 
-# 功能2：读取文件末尾1000字节并还原为字符串，然后删除这1000字节
-# 参数1: 文件路径
-# 返回: 读取到的字符串（通过echo输出）
-function read_and_remove_fixed_bytes() {
-    local file_path="$1"
-    
-    # 检查参数
-    if [ -z "$file_path" ]; then
-        echo "❌ 错误: 文件路径不能为空" >&2
-        echo "用法: read_and_remove_fixed_bytes <文件路径>" >&2
-        return 1
-    fi
-    
-    # 检查文件是否存在
-    if [ ! -f "$file_path" ]; then
-        echo "❌ 错误: 文件 '$file_path' 不存在" >&2
-        return 1
-    fi
-    
-    # 获取文件大小
-    local file_size=$(wc -c < "$file_path")
-    
-    # 检查文件是否至少有1000字节
-    if [ $file_size -lt 1000 ]; then
-        echo "❌ 错误: 文件大小不足1000字节 (当前: $file_size 字节)" >&2
-        return 1
-    fi
-    
-    # 读取末尾1000字节
-    local last_1000_bytes=$(tail -c 1000 "$file_path")
-    
-    # 移除末尾的null字符并转换为可读字符串
-    local readable_string=$(echo -n "$last_1000_bytes" | tr -d '\0')
-    
-    # 计算新文件大小（移除末尾1000字节）
-    local new_size=$((file_size - 1000))
-    
-    # 创建临时文件
-    local temp_file=$(mktemp)
-    
-    # 将原文件除了末尾1000字节的部分复制到临时文件
-    head -c $new_size "$file_path" > "$temp_file"
-    
-    # 用临时文件替换原文件
-    mv "$temp_file" "$file_path"
-    
-    # 当在交互模式下调用时显示详细信息
-    if [ "${FUNCNAME[1]}" = "main" ]; then
-        echo "✅ 成功读取并移除文件 '$file_path' 末尾1000字节" >&2
-        echo "📝 读取到的字符串: '$readable_string'" >&2
-        echo "📊 文件新大小: $(wc -c < "$file_path") 字节" >&2
-    fi
-    
-    # 返回读取到的字符串
-    echo "$readable_string"
-    return 0
-}
-
 # 主程序
 main() {
     echo "🛠️  请选择功能："
-    echo "1) 向文件末尾写入固定1000字节数据"
-    echo "2) 读取文件末尾1000字节数据并移除"
+    echo "1) 向文件末尾写入固定1100字节数据 (100字节标志位 + 1000字节内容)"
+    echo "2) 读取文件末尾1100字节数据并移除 (验证标志位)"
     echo "3) 批量处理文件夹中的文件（追加文件名到末尾）"
     echo "4) 批量还原文件名（从文件末尾读取并重命名）"
     echo "5) 退出"
@@ -376,7 +443,7 @@ main() {
     case $choice in
         1)
             echo ""
-            echo "📝 功能1: 写入固定1000字节数据"
+            echo "📝 功能1: 写入固定1100字节数据 (100字节标志位 + 1000字节内容)"
             read -p "请输入要写入的字符串: " input_string
             read -p "请输入目标文件路径: " target_file
             echo ""
@@ -384,7 +451,7 @@ main() {
             ;;
         2)
             echo ""
-            echo "📖 功能2: 读取末尾1000字节数据"
+            echo "📖 功能2: 读取末尾1100字节数据 (验证标志位并提取内容)"
             read -p "请输入文件路径: " source_file
             echo ""
             read_and_remove_fixed_bytes "$source_file"
