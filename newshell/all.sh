@@ -437,6 +437,190 @@ function restore_file_names() {
 }
 
 
+
+# 功能5：获取一个带序号的文件名
+# 返回: 生成的文件名（通过echo输出）
+function getFileName() {
+    # 文件前缀
+    local filePrefix="fgg"
+    local indexFile="/indexFXY"
+    
+    echo "🔢 开始生成文件名..."
+    
+    # 检查索引文件是否存在，不存在则创建并初始化为1
+    if [ ! -f "$indexFile" ]; then
+        echo "📝 索引文件不存在，创建并初始化: $indexFile"
+        echo "1" > "$indexFile"
+        if [ $? -eq 0 ]; then
+            echo "   ✅ 成功创建索引文件"
+        else
+            echo "   ❌ 创建索引文件失败" >&2
+            return 1
+        fi
+    fi
+    
+    # 读取当前索引值
+    local index
+    if ! index=$(cat "$indexFile" 2>/dev/null); then
+        echo "❌ 错误: 无法读取索引文件 $indexFile" >&2
+        return 1
+    fi
+    
+    # 验证索引值是否为数字
+    if ! [[ "$index" =~ ^[0-9]+$ ]]; then
+        echo "❌ 错误: 索引文件中的值不是有效数字: '$index'" >&2
+        echo "🔧 重置索引文件为1"
+        echo "1" > "$indexFile"
+        index=1
+    fi
+    
+    echo "📖 读取的索引值: $index"
+    
+    # 生成文件名
+    local fileNameString="${filePrefix}${index}"
+    echo "🏷️  生成的文件名: '$fileNameString'"
+    
+    # 索引值加一并写回文件
+    ((index++))
+    if echo "$index" > "$indexFile"; then
+        echo "📝 索引值已更新为: $index"
+    else
+        echo "⚠️  警告: 更新索引文件失败，但仍返回生成的文件名" >&2
+    fi
+    
+    # 返回生成的文件名
+    echo "$fileNameString"
+    return 0
+}
+
+
+# 功能6：根据文件后缀判断是否为视频文件
+# 参数1: 文件路径
+# 返回: 0表示是视频文件，1表示不是视频文件
+function isVideoFileFunction() {
+    local filePath="$1"
+    
+    # 检查参数
+    if [ -z "$filePath" ]; then
+        echo "❌ 错误: 文件路径不能为空" >&2
+        return 1
+    fi
+    
+    # 检查文件是否存在
+    if [ ! -f "$filePath" ]; then
+        echo "❌ 错误: 文件 '$filePath' 不存在" >&2
+        return 1
+    fi
+    
+    # 获取文件后缀
+    local file_suffix_string="${filePath##*.}"
+    
+    # 如果没有后缀（文件名中没有点），返回false
+    if [ "$file_suffix_string" = "$filePath" ]; then
+        return 1
+    fi
+    
+    # 将后缀转换为小写
+    local file_suffix_string_allLowercase=$(echo "$file_suffix_string" | tr '[:upper:]' '[:lower:]')
+    
+    # 定义视频文件后缀列表
+    local video_extensions=(
+        "mp4" "avi" "wmv" "mov" "mkv" "flv" "webm" "m4v" "3gp" "3g2"
+        "mpg" "mpeg" "m2v" "m4p" "m4v" "divx" "xvid" "asf" "rm" "rmvb"
+        "vob" "ts" "mts" "m2ts" "f4v" "f4p" "f4a" "f4b" "ogv" "ogg"
+        "dv" "amv" "m2p" "ps" "qt" "yuv" "viv" "nsr" "nsv" "nut"
+    )
+    
+    # 检查后缀是否在视频文件列表中
+    for ext in "${video_extensions[@]}"; do
+        if [ "$file_suffix_string_allLowercase" = "$ext" ]; then
+            return 0  # 是视频文件
+        fi
+    done
+    
+    return 1  # 不是视频文件
+}
+
+# 功能7：给视频文件末尾追加1100字节信息
+# 参数1: 文件夹路径
+function processVideoFiles() {
+    local folderPath="$1"
+    
+    # 检查参数
+    if [ -z "$folderPath" ]; then
+        echo "❌ 错误: 文件夹路径不能为空"
+        echo "用法: processVideoFiles <文件夹路径>"
+        return 1
+    fi
+    
+    # 检查文件夹是否存在
+    if [ ! -d "$folderPath" ]; then
+        echo "❌ 错误: 文件夹 '$folderPath' 不存在"
+        return 1
+    fi
+    
+    echo "🎬 开始处理视频文件，文件夹路径: '$folderPath'"
+    echo "📏 条件: 视频文件且大小 > 100MB"
+    echo "🔄 正在递归扫描文件..."
+    echo ""
+    
+    local total_files=0
+    local video_files=0
+    local processed_files=0
+    local skipped_files=0
+    local min_size_bytes=$((100 * 1024 * 1024))  # 100MB in bytes
+    
+    # 递归遍历文件夹中的所有文件
+    while IFS= read -r -d '' file_path; do
+        ((total_files++))
+        local filename=$(basename "$file_path")
+        local file_size=$(stat -c%s "$file_path" 2>/dev/null || stat -f%z "$file_path" 2>/dev/null)
+        
+        # 显示当前处理的文件
+        echo "🔍 检查文件: '$filename'"
+        
+        # 检查是否为视频文件
+        if isVideoFileFunction "$file_path"; then
+            ((video_files++))
+            echo "   ✅ 识别为视频文件"
+            
+            # 检查文件大小
+            if [ -n "$file_size" ] && [ "$file_size" -gt "$min_size_bytes" ]; then
+                local size_mb=$((file_size / 1024 / 1024))
+                echo "   📏 文件大小: ${size_mb}MB (符合条件)"
+                echo "   📝 开始追加文件名到末尾..."
+                
+                # 调用write_fixed_bytes函数
+                if write_fixed_bytes "$filename" "$file_path"; then
+                    ((processed_files++))
+                    echo "   🎉 成功处理: '$filename'"
+                else
+                    echo "   ❌ 处理失败: '$filename'"
+                fi
+            else
+                ((skipped_files++))
+                local size_mb=$((file_size / 1024 / 1024))
+                echo "   ⏭️  跳过: 文件大小 ${size_mb}MB < 100MB"
+            fi
+        else
+            echo "   ⏭️  跳过: 非视频文件"
+        fi
+        
+        echo ""
+        
+    done < <(find "$folderPath" -type f -print0 2>/dev/null)
+    
+    echo "🎉 视频文件处理完成!"
+    echo "📊 统计信息:"
+    echo "   - 总文件数: $total_files"
+    echo "   - 视频文件数: $video_files"
+    echo "   - 已处理文件数: $processed_files"
+    echo "   - 跳过文件数: $skipped_files"
+    echo ""
+}
+
+
+
 # 主程序
 write_fixed_bytes_main() {
     echo "🛠️  请选择功能："
@@ -444,9 +628,12 @@ write_fixed_bytes_main() {
     echo "2) 读取文件末尾1100字节数据并移除 (验证标志位)"
     echo "3) 批量处理文件夹中的文件（追加文件名到末尾）"
     echo "4) 批量还原文件名（从文件末尾读取并重命名）"
-    echo "5) 退出"
+    echo "5) 生成带序号的文件名"
+    echo "6) 检测文件是否为视频文件"
+    echo "7) 批量处理视频文件（递归扫描，追加文件名）"
+    echo "8) 退出"
     
-    read -p "请输入选择 (1-5): " choice
+    read -p "请输入选择 (1-8): " choice
     
     case $choice in
         1)
@@ -489,6 +676,47 @@ write_fixed_bytes_main() {
             restore_file_names "$folder_list"
             ;;
         5)
+            echo ""
+            echo "🔢 功能5: 生成带序号的文件名"
+            echo ""
+            filename=$(getFileName)
+            if [ $? -eq 0 ]; then
+                echo ""
+                echo "🎉 成功生成文件名: '$filename'"
+                echo "💡 提示: 可以在其他脚本中调用此函数获取唯一的文件名"
+            else
+                echo ""
+                echo "❌ 生成文件名失败"
+            fi
+            ;;
+        6)
+            echo ""
+            echo "🎬 功能6: 检测文件是否为视频文件"
+            read -p "请输入文件路径: " test_file_path
+            echo ""
+            if isVideoFileFunction "$test_file_path"; then
+                echo "✅ '$test_file_path' 是视频文件"
+                # 显示文件信息
+                if [ -f "$test_file_path" ]; then
+                    local file_size=$(stat -c%s "$test_file_path" 2>/dev/null || stat -f%z "$test_file_path" 2>/dev/null)
+                    if [ -n "$file_size" ]; then
+                        local size_mb=$((file_size / 1024 / 1024))
+                        echo "📏 文件大小: ${size_mb}MB"
+                    fi
+                fi
+            else
+                echo "❌ '$test_file_path' 不是视频文件"
+            fi
+            ;;
+        7)
+            echo ""
+            echo "🎬 功能7: 批量处理视频文件"
+            echo "说明: 递归扫描指定文件夹，对大于100MB的视频文件追加文件名到末尾"
+            read -p "请输入文件夹路径: " video_folder_path
+            echo ""
+            processVideoFiles "$video_folder_path"
+            ;;
+        8)
             echo "👋 再见!"
             exit 0
             ;;
