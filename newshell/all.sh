@@ -171,7 +171,7 @@ function read_and_remove_fixed_bytes() {
 # 参数1: 文件路径列表字符串 (如 "/Users/cc/Desktop/test/oppp/v{1..40}" 或 "/v30")
 function process_folders() {
     local file_path_list_string="$1"
-    local file_suffix_string="tmpfile"
+    local file_suffix_string="aria2"
     
     # 检查参数
     if [ -z "$file_path_list_string" ]; then
