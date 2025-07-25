@@ -442,7 +442,7 @@ function restore_file_names() {
 # 返回: 生成的文件名（通过echo输出）
 function getFileName() {
     # 文件前缀
-    local filePrefix="fgg"
+    local filePrefix="dom"
     local indexFile="/indexFXY"
     
     echo "🔢 开始生成文件名..." >&2
