@@ -434,7 +434,7 @@ function restore_file_names() {
 function getFileName() {
     # 文件前缀
     local filePrefix="fgg"
-    local indexFile="/indexFXY"
+    local indexFile="/Users/codew/Desktop/indexFXY"
     
     echo "🔢 开始生成文件名..." >&2
     
@@ -536,6 +536,7 @@ function isVideoFileFunction() {
 # 参数1: 文件夹路径
 function processVideoFiles() {
     local folderPath="$1"
+    local file_suffix_string="aria2"
     
     # 检查参数
     if [ -z "$folderPath" ]; then
@@ -552,6 +553,7 @@ function processVideoFiles() {
     
     echo "🎬 开始处理视频文件，文件夹路径: '$folderPath'"
     echo "📏 条件: 视频文件且大小 > 100MB"
+    echo "🚫 跳过条件: 存在后缀为 '$file_suffix_string' 的文件"
     echo "🔄 正在递归扫描文件..."
     echo ""
     
@@ -559,47 +561,82 @@ function processVideoFiles() {
     local video_files=0
     local processed_files=0
     local skipped_files=0
+    local skipped_folders=0
     local min_size_bytes=$((100 * 1024 * 1024))  # 100MB in bytes
     
-    # 递归遍历文件夹中的所有文件
-    while IFS= read -r -d '' file_path; do
-        ((total_files++))
-        local filename=$(basename "$file_path")
-        local file_size=$(stat -c%s "$file_path" 2>/dev/null || stat -f%z "$file_path" 2>/dev/null)
+    # 递归处理文件夹的内部函数
+    function process_directory() {
+        local current_dir="$1"
+        local relative_path="${current_dir#$folderPath}"
+        [ -z "$relative_path" ] && relative_path="/"
         
-        # 显示当前处理的文件
-        echo "🔍 检查文件: '$filename'"
+        echo "📁 进入文件夹: $(basename "$current_dir") $relative_path"
         
-        # 检查是否为视频文件
-        if isVideoFileFunction "$file_path"; then
-            ((video_files++))
-            echo "   ✅ 识别为视频文件"
-            
-            # 检查文件大小
-            if [ -n "$file_size" ] && [ "$file_size" -gt "$min_size_bytes" ]; then
-                local size_mb=$((file_size / 1024 / 1024))
-                echo "   📏 文件大小: ${size_mb}MB (符合条件)"
-                echo "   📝 开始追加文件名到末尾..."
-                
-                # 调用write_fixed_bytes函数
-                if write_fixed_bytes "$filename" "$file_path"; then
-                    ((processed_files++))
-                    echo "   🎉 成功处理: '$filename'"
-                else
-                    echo "   ❌ 处理失败: '$filename'"
-                fi
-            else
-                ((skipped_files++))
-                local size_mb=$((file_size / 1024 / 1024))
-                echo "   ⏭️  跳过: 文件大小 ${size_mb}MB < 100MB"
+        # 检查当前文件夹是否存在以file_suffix_string为后缀的文件
+        local has_tmp_file=false
+        while IFS= read -r -d '' file_path; do
+            local filename=$(basename "$file_path")
+            if [[ "$filename" == *"$file_suffix_string" ]]; then
+                has_tmp_file=true
+                echo "   🚫 发现后缀文件: $filename，跳过此文件夹及其子文件夹"
+                ((skipped_folders++))
+                break
             fi
-        else
-            echo "   ⏭️  跳过: 非视频文件"
+        done < <(find "$current_dir" -maxdepth 1 -type f -print0 2>/dev/null)
+        
+        # 如果当前文件夹存在后缀文件，跳过整个文件夹
+        if [ "$has_tmp_file" = true ]; then
+            echo ""
+            return 0
         fi
         
-        echo ""
+        # 处理当前文件夹中的文件
+        while IFS= read -r -d '' file_path; do
+            ((total_files++))
+            local filename=$(basename "$file_path")
+            local file_size=$(stat -c%s "$file_path" 2>/dev/null || stat -f%z "$file_path" 2>/dev/null)
+            
+            # 显示当前处理的文件
+            echo "   🔍 检查文件: '$filename'"
+            
+            # 检查是否为视频文件
+            if isVideoFileFunction "$file_path"; then
+                ((video_files++))
+                echo "      ✅ 识别为视频文件"
+                
+                # 检查文件大小
+                if [ -n "$file_size" ] && [ "$file_size" -gt "$min_size_bytes" ]; then
+                    local size_mb=$((file_size / 1024 / 1024))
+                    echo "      📏 文件大小: ${size_mb}MB (符合条件)"
+                    echo "      📝 开始追加文件名到末尾..."
+                    
+                    # 调用write_fixed_bytes函数
+                    if write_fixed_bytes "$filename" "$file_path"; then
+                        ((processed_files++))
+                        echo "      🎉 成功处理: '$filename'"
+                    else
+                        echo "      ❌ 处理失败: '$filename'"
+                    fi
+                else
+                    ((skipped_files++))
+                    local size_mb=$((file_size / 1024 / 1024))
+                    echo "      ⏭️  跳过: 文件大小 ${size_mb}MB < 100MB"
+                fi
+            else
+                echo "      ⏭️  跳过: 非视频文件"
+            fi
+        done < <(find "$current_dir" -maxdepth 1 -type f -print0 2>/dev/null)
         
-    done < <(find "$folderPath" -type f -print0 2>/dev/null)
+        # 递归处理子文件夹
+        while IFS= read -r -d '' dir_path; do
+            process_directory "$dir_path"
+        done < <(find "$current_dir" -maxdepth 1 -type d ! -path "$current_dir" -print0 2>/dev/null)
+        
+        echo ""
+    }
+    
+    # 开始处理根文件夹
+    process_directory "$folderPath"
     
     echo "🎉 视频文件处理完成!"
     echo "📊 统计信息:"
@@ -607,6 +644,7 @@ function processVideoFiles() {
     echo "   - 视频文件数: $video_files"
     echo "   - 已处理文件数: $processed_files"
     echo "   - 跳过文件数: $skipped_files"
+    echo "   - 跳过文件夹数: $skipped_folders"
     echo ""
 }
 
@@ -658,12 +696,27 @@ function moveProcessedFiles() {
     while IFS= read -r -d '' file_path; do
         ((total_files++))
         local filename=$(basename "$file_path")
+        local relative_path="${file_path#$folderPath/}"
         
-        # 显示当前处理的文件
-        echo "🔍 检查文件: '$filename'"
+        # 显示当前处理的文件及其相对路径
+        echo "🔍 检查文件: '$relative_path'"
         
-        # 获取文件大小
-        local file_size=$(wc -c < "$file_path" 2>/dev/null)
+        # 检查文件是否可读
+        if [ ! -r "$file_path" ]; then
+            echo "   ❌ 文件不可读，跳过"
+            echo ""
+            continue
+        fi
+        
+        # 获取文件大小 - 使用更可靠的方法
+        local file_size
+        if command -v stat >/dev/null 2>&1; then
+            # 优先使用stat命令（支持Linux和macOS）
+            file_size=$(stat -c%s "$file_path" 2>/dev/null || stat -f%z "$file_path" 2>/dev/null)
+        else
+            # 备用方法
+            file_size=$(wc -c < "$file_path" 2>/dev/null)
+        fi
         
         # 检查文件是否至少有1100字节
         if [ -z "$file_size" ] || [ "$file_size" -lt 1100 ]; then
@@ -672,13 +725,32 @@ function moveProcessedFiles() {
             continue
         fi
         
-        # 读取文件末尾1100字节并验证标志位
+        echo "   📏 文件大小: $file_size 字节"
+        
+        # 创建临时文件
         local temp_file=$(mktemp)
         local mark_temp_file=$(mktemp)
         
-        # 读取末尾1100字节
+        # 确保临时文件创建成功
+        if [ -z "$temp_file" ] || [ -z "$mark_temp_file" ] || [ ! -f "$temp_file" ] || [ ! -f "$mark_temp_file" ]; then
+            echo "   ❌ 创建临时文件失败"
+            rm -f "$temp_file" "$mark_temp_file" 2>/dev/null
+            echo ""
+            continue
+        fi
+        
+        # 读取文件末尾1100字节
         if ! tail -c 1100 "$file_path" > "$temp_file" 2>/dev/null; then
             echo "   ❌ 读取文件末尾数据失败"
+            rm -f "$temp_file" "$mark_temp_file"
+            echo ""
+            continue
+        fi
+        
+        # 检查提取的数据大小
+        local extracted_size=$(wc -c < "$temp_file" 2>/dev/null)
+        if [ -z "$extracted_size" ] || [ "$extracted_size" -lt 100 ]; then
+            echo "   ❌ 提取的数据不足100字节"
             rm -f "$temp_file" "$mark_temp_file"
             echo ""
             continue
@@ -692,8 +764,13 @@ function moveProcessedFiles() {
             continue
         fi
         
-        # 将标志位转换为字符串
-        local mark_string=$(cat "$mark_temp_file" | tr -d '\0')
+        # 将标志位转换为字符串 - 更安全的方法
+        local mark_string
+        mark_string=$(cat "$mark_temp_file" 2>/dev/null | tr -d '\0' | head -c 100)
+        
+        # 调试信息：显示标志位内容（前20个字符）
+        local debug_mark="${mark_string:0:20}"
+        echo "   🔍 检测到标志位: '${debug_mark}...'"
         
         # 验证标志位
         if [ "$mark_string" = "FKY996" ]; then
@@ -702,7 +779,7 @@ function moveProcessedFiles() {
             
             # 调用getFileName获取新文件名
             local new_name_string
-            new_name_string=$(getFileName 2>/dev/null)
+            new_name_string=$(getFileName "$file_path" 2>/dev/null)
             local get_name_result=$?
             
             if [ $get_name_result -eq 0 ] && [ -n "$new_name_string" ]; then
@@ -711,41 +788,61 @@ function moveProcessedFiles() {
                 local file_dir=$(dirname "$file_path")
                 local temp_new_path="$file_dir/$new_name_string"
                 
-                # 第一步：重命名文件
-                echo "   📝 重命名文件: '$filename' -> '$new_name_string'"
-                if mv "$file_path" "$temp_new_path"; then
-                    echo "   ✅ 成功重命名文件"
-                    
-                    # 第二步：移动文件到目标文件夹
-                    local final_target_path="$target_folder/$new_name_string"
-                    
-                    # 检查目标位置是否已有同名文件
-                    if [ -f "$final_target_path" ]; then
-                        echo "   ⚠️  目标位置已存在同名文件，添加时间戳后缀"
-                        local timestamp=$(date +"%Y%m%d_%H%M%S")
-                        final_target_path="$target_folder/${new_name_string}_${timestamp}"
-                    fi
-                    
-                    echo "   📦 移动文件到: '$final_target_path'"
-                    if mv "$temp_new_path" "$final_target_path"; then
-                        ((moved_files++))
-                        echo "   🎉 成功移动文件: '$final_target_path'"
+                # 检查新文件名是否与原文件名相同
+                if [ "$filename" = "$new_name_string" ]; then
+                    echo "   ℹ️  文件名无需更改，直接移动"
+                    temp_new_path="$file_path"
+                else
+                    # 第一步：重命名文件
+                    echo "   📝 重命名文件: '$filename' -> '$new_name_string'"
+                    if mv "$file_path" "$temp_new_path"; then
+                        echo "   ✅ 成功重命名文件"
                     else
                         ((failed_files++))
-                        echo "   ❌ 移动文件失败，尝试恢复原文件名"
-                        # 尝试恢复原文件名
-                        mv "$temp_new_path" "$file_path" 2>/dev/null
+                        echo "   ❌ 重命名文件失败"
+                        rm -f "$temp_file" "$mark_temp_file"
+                        echo ""
+                        continue
                     fi
+                fi
+                
+                # 第二步：移动文件到目标文件夹
+                local final_target_path="$target_folder/$new_name_string"
+                
+                # 检查目标位置是否已有同名文件
+                if [ -f "$final_target_path" ]; then
+                    echo "   ⚠️  目标位置已存在同名文件，添加时间戳后缀"
+                    local timestamp=$(date +"%Y%m%d_%H%M%S_%N" 2>/dev/null || date +"%Y%m%d_%H%M%S")
+                    local name_without_ext="${new_name_string%.*}"
+                    local ext="${new_name_string##*.}"
+                    if [ "$name_without_ext" = "$new_name_string" ]; then
+                        # 没有扩展名
+                        final_target_path="$target_folder/${new_name_string}_${timestamp}"
+                    else
+                        # 有扩展名
+                        final_target_path="$target_folder/${name_without_ext}_${timestamp}.${ext}"
+                    fi
+                fi
+                
+                echo "   📦 移动文件到: '$(basename "$final_target_path")'"
+                if mv "$temp_new_path" "$final_target_path"; then
+                    ((moved_files++))
+                    echo "   🎉 成功移动文件"
                 else
                     ((failed_files++))
-                    echo "   ❌ 重命名文件失败"
+                    echo "   ❌ 移动文件失败"
+                    # 如果重命名了但移动失败，尝试恢复原文件名
+                    if [ "$temp_new_path" != "$file_path" ]; then
+                        echo "   🔄 尝试恢复原文件名"
+                        mv "$temp_new_path" "$file_path" 2>/dev/null
+                    fi
                 fi
             else
                 ((failed_files++))
                 echo "   ❌ 生成新文件名失败 (返回码: $get_name_result)"
             fi
         else
-            echo "   ⏭️  跳过: 非脚本处理文件 (标志位: '$mark_string')"
+            echo "   ⏭️  跳过: 非脚本处理文件"
         fi
         
         # 清理临时文件
