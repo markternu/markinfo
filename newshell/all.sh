@@ -545,6 +545,7 @@ function isVideoFileFunction() {
 # 参数1: 文件夹路径
 function processVideoFiles() {
     local folderPath="$1"
+    local file_suffix_string="aria2"
     
     # 检查参数
     if [ -z "$folderPath" ]; then
@@ -561,6 +562,7 @@ function processVideoFiles() {
     
     echo "🎬 开始处理视频文件，文件夹路径: '$folderPath'"
     echo "📏 条件: 视频文件且大小 > 100MB"
+    echo "🚫 跳过条件: 存在后缀为 '$file_suffix_string' 的文件"
     echo "🔄 正在递归扫描文件..."
     echo ""
     
@@ -568,47 +570,82 @@ function processVideoFiles() {
     local video_files=0
     local processed_files=0
     local skipped_files=0
+    local skipped_folders=0
     local min_size_bytes=$((100 * 1024 * 1024))  # 100MB in bytes
     
-    # 递归遍历文件夹中的所有文件
-    while IFS= read -r -d '' file_path; do
-        ((total_files++))
-        local filename=$(basename "$file_path")
-        local file_size=$(stat -c%s "$file_path" 2>/dev/null || stat -f%z "$file_path" 2>/dev/null)
+    # 递归处理文件夹的内部函数
+    function process_directory() {
+        local current_dir="$1"
+        local relative_path="${current_dir#$folderPath}"
+        [ -z "$relative_path" ] && relative_path="/"
         
-        # 显示当前处理的文件
-        echo "🔍 检查文件: '$filename'"
+        echo "📁 进入文件夹: $(basename "$current_dir") $relative_path"
         
-        # 检查是否为视频文件
-        if isVideoFileFunction "$file_path"; then
-            ((video_files++))
-            echo "   ✅ 识别为视频文件"
-            
-            # 检查文件大小
-            if [ -n "$file_size" ] && [ "$file_size" -gt "$min_size_bytes" ]; then
-                local size_mb=$((file_size / 1024 / 1024))
-                echo "   📏 文件大小: ${size_mb}MB (符合条件)"
-                echo "   📝 开始追加文件名到末尾..."
-                
-                # 调用write_fixed_bytes函数
-                if write_fixed_bytes "$filename" "$file_path"; then
-                    ((processed_files++))
-                    echo "   🎉 成功处理: '$filename'"
-                else
-                    echo "   ❌ 处理失败: '$filename'"
-                fi
-            else
-                ((skipped_files++))
-                local size_mb=$((file_size / 1024 / 1024))
-                echo "   ⏭️  跳过: 文件大小 ${size_mb}MB < 100MB"
+        # 检查当前文件夹是否存在以file_suffix_string为后缀的文件
+        local has_tmp_file=false
+        while IFS= read -r -d '' file_path; do
+            local filename=$(basename "$file_path")
+            if [[ "$filename" == *"$file_suffix_string" ]]; then
+                has_tmp_file=true
+                echo "   🚫 发现后缀文件: $filename，跳过此文件夹及其子文件夹"
+                ((skipped_folders++))
+                break
             fi
-        else
-            echo "   ⏭️  跳过: 非视频文件"
+        done < <(find "$current_dir" -maxdepth 1 -type f -print0 2>/dev/null)
+        
+        # 如果当前文件夹存在后缀文件，跳过整个文件夹
+        if [ "$has_tmp_file" = true ]; then
+            echo ""
+            return 0
         fi
         
-        echo ""
+        # 处理当前文件夹中的文件
+        while IFS= read -r -d '' file_path; do
+            ((total_files++))
+            local filename=$(basename "$file_path")
+            local file_size=$(stat -c%s "$file_path" 2>/dev/null || stat -f%z "$file_path" 2>/dev/null)
+            
+            # 显示当前处理的文件
+            echo "   🔍 检查文件: '$filename'"
+            
+            # 检查是否为视频文件
+            if isVideoFileFunction "$file_path"; then
+                ((video_files++))
+                echo "      ✅ 识别为视频文件"
+                
+                # 检查文件大小
+                if [ -n "$file_size" ] && [ "$file_size" -gt "$min_size_bytes" ]; then
+                    local size_mb=$((file_size / 1024 / 1024))
+                    echo "      📏 文件大小: ${size_mb}MB (符合条件)"
+                    echo "      📝 开始追加文件名到末尾..."
+                    
+                    # 调用write_fixed_bytes函数
+                    if write_fixed_bytes "$filename" "$file_path"; then
+                        ((processed_files++))
+                        echo "      🎉 成功处理: '$filename'"
+                    else
+                        echo "      ❌ 处理失败: '$filename'"
+                    fi
+                else
+                    ((skipped_files++))
+                    local size_mb=$((file_size / 1024 / 1024))
+                    echo "      ⏭️  跳过: 文件大小 ${size_mb}MB < 100MB"
+                fi
+            else
+                echo "      ⏭️  跳过: 非视频文件"
+            fi
+        done < <(find "$current_dir" -maxdepth 1 -type f -print0 2>/dev/null)
         
-    done < <(find "$folderPath" -type f -print0 2>/dev/null)
+        # 递归处理子文件夹
+        while IFS= read -r -d '' dir_path; do
+            process_directory "$dir_path"
+        done < <(find "$current_dir" -maxdepth 1 -type d ! -path "$current_dir" -print0 2>/dev/null)
+        
+        echo ""
+    }
+    
+    # 开始处理根文件夹
+    process_directory "$folderPath"
     
     echo "🎉 视频文件处理完成!"
     echo "📊 统计信息:"
@@ -616,6 +653,7 @@ function processVideoFiles() {
     echo "   - 视频文件数: $video_files"
     echo "   - 已处理文件数: $processed_files"
     echo "   - 跳过文件数: $skipped_files"
+    echo "   - 跳过文件夹数: $skipped_folders"
     echo ""
 }
 
