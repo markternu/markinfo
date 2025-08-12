@@ -108,7 +108,7 @@ function parse_path_list() {
     fi
 }
 
-# 功能1：向文件末尾追加固定1100字节的数据（100字节标志位 + 1000字节内容）
+# 功能1：向文件末尾追加固定1100字节的数据（100字节标志位 + 1000字节内容）- 修复中文字符问题
 # 参数1: 要写入的字符串
 # 参数2: 目标文件路径
 function write_fixed_bytes() {
@@ -126,27 +126,29 @@ function write_fixed_bytes() {
     local mark_string="FKY996"
     
     echo "🔧 开始写入数据到文件: '$file_path'"
+    echo "📝 写入内容: '$name' (包含中文/特殊字符)"
     
     # 第一步：写入100字节的标志位
     echo "📝 第一步: 写入100字节标志位 '$mark_string'"
     
-    # 获取标志字符串的字节数
-    local mark_size=${#mark_string}
-    echo "   标志字符串长度: $mark_size 字节"
+    # 获取标志字符串的字节数（使用正确的字节长度计算）
+    local mark_byte_size
+    mark_byte_size=$(get_byte_length "$mark_string")
+    echo "   标志字符串字节长度: $mark_byte_size 字节"
     
     # 计算标志位需要填充的字节数
-    local mark_padding_size=$((100 - mark_size))
+    local mark_padding_size=$((100 - mark_byte_size))
     
     if [ $mark_padding_size -lt 0 ]; then
         # 如果标志字符串超过100字节，截断到100字节
         echo "   ⚠️  警告: 标志字符串超过100字节，将被截断"
-        printf "%.100s" "$mark_string" >> "$file_path"
+        printf "%s" "$mark_string" | head -c 100 >> "$file_path"
     else
         # 如果标志字符串不足100字节，用空字符(\0)填充
         echo "   填充 $mark_padding_size 个null字节"
         printf "%s" "$mark_string" >> "$file_path"
-        # 使用printf填充剩余字节为0
-        printf "%*s" $mark_padding_size "" | tr ' ' '\0' >> "$file_path"
+        # 使用dd填充剩余字节为0（更可靠的方法）
+        dd if=/dev/zero bs=1 count=$mark_padding_size >> "$file_path" 2>/dev/null
     fi
     
     echo "   ✅ 标志位写入完成 (100字节)"
@@ -154,23 +156,25 @@ function write_fixed_bytes() {
     # 第二步：写入1000字节的内容数据
     echo "📝 第二步: 写入1000字节内容数据 '$name'"
     
-    # 获取当前字符串的字节数
-    local current_size=${#name}
-    echo "   内容字符串长度: $current_size 字节"
+    # 获取当前字符串的字节数（使用正确的字节长度计算）
+    local current_byte_size
+    current_byte_size=$(get_byte_length "$name")
+    echo "   内容字符串字节长度: $current_byte_size 字节"
+    echo "   内容字符串字符数量: ${#name} 个字符"
     
     # 计算需要填充的字节数
-    local padding_size=$((1000 - current_size))
+    local padding_size=$((1000 - current_byte_size))
     
     if [ $padding_size -lt 0 ]; then
         # 如果字符串超过1000字节，截断到1000字节
         echo "   ⚠️  警告: 输入字符串超过1000字节，将被截断"
-        printf "%.1000s" "$name" >> "$file_path"
+        printf "%s" "$name" | head -c 1000 >> "$file_path"
     else
         # 如果字符串不足1000字节，用空字符(\0)填充
         echo "   填充 $padding_size 个null字节"
         printf "%s" "$name" >> "$file_path"
-        # 使用printf填充剩余字节为0
-        printf "%*s" $padding_size "" | tr ' ' '\0' >> "$file_path"
+        # 使用dd填充剩余字节为0（更可靠的方法）
+        dd if=/dev/zero bs=1 count=$padding_size >> "$file_path" 2>/dev/null
     fi
     
     echo "   ✅ 内容数据写入完成 (1000字节)"
@@ -178,10 +182,11 @@ function write_fixed_bytes() {
     echo "🎉 总计写入完成!"
     echo "✅ 成功向文件 '$file_path' 末尾写入1100字节数据"
     echo "   📊 结构: 100字节标志位 + 1000字节内容"
-    echo "   🏷️  标志位: '$mark_string'"
-    echo "   📝 写入内容: '$name'"
+    echo "   🏷️  标志位: '$mark_string' ($mark_byte_size 字节)"
+    echo "   📝 写入内容: '$name' ($current_byte_size 字节, ${#name} 字符)"
     echo "   📊 文件当前大小: $(wc -c < "$file_path") 字节"
 }
+
 
 # 功能2：读取文件末尾1100字节并还原为字符串，然后删除这1100字节
 # 参数1: 文件路径
