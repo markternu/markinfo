@@ -1,5 +1,106 @@
 #!/bin/bash
 
+# 通用路径列表解析函数
+function parse_path_list() {
+    local file_path_list_string="$1"
+    local -n result_array=$2  # 使用nameref传递数组引用
+    
+    result_array=()  # 清空结果数组
+    
+    # 处理大括号扩展
+    if [[ "$file_path_list_string" == *"{"*".."*"}"* ]]; then
+        echo "🔧 检测到大括号语法，手动展开路径..." >&2
+        
+        # 提取大括号内容
+        if [[ "$file_path_list_string" =~ \{([0-9]+)\.\.([0-9]+)\} ]]; then
+            local start_num="${BASH_REMATCH[1]}"
+            local end_num="${BASH_REMATCH[2]}"
+            local base_path="${file_path_list_string%\{*\}*}"  # 获取大括号前的部分
+            local suffix_path="${file_path_list_string#*\}}"   # 获取大括号后的部分
+            
+            # 重新构建路径数组
+            for ((i=start_num; i<=end_num; i++)); do
+                result_array+=("${base_path}${i}${suffix_path}")
+            done
+            
+            echo "   ✅ 成功展开为 ${#result_array[@]} 个路径 (${base_path}${start_num}${suffix_path} 到 ${base_path}${end_num}${suffix_path})" >&2
+        fi
+    else
+        # 处理路径列表 - 支持引号和换行分隔
+        echo "🔧 解析路径列表..." >&2
+        
+        # 首先尝试按换行分割
+        if [[ "$file_path_list_string" == *$'\n'* ]]; then
+            echo "   检测到换行符，按行分割路径" >&2
+            while IFS= read -r line; do
+                line=$(echo "$line" | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')  # 去除前后空格
+                if [ -n "$line" ]; then
+                    result_array+=("$line")
+                fi
+            done <<< "$file_path_list_string"
+        else
+            # 按空格分割，但正确处理引号
+            echo "   按空格分割路径，支持引号包围" >&2
+            
+            # 使用eval和printf来正确处理引号
+            local temp_file=$(mktemp)
+            printf '%s\n' "$file_path_list_string" > "$temp_file"
+            
+            # 使用bash的read内建命令正确解析引号
+            local current_path=""
+            local in_quotes=false
+            local quote_char=""
+            local i=0
+            
+            while [ $i -lt ${#file_path_list_string} ]; do
+                local char="${file_path_list_string:$i:1}"
+                
+                if [ "$in_quotes" = false ]; then
+                    if [ "$char" = '"' ] || [ "$char" = "'" ]; then
+                        in_quotes=true
+                        quote_char="$char"
+                    elif [ "$char" = ' ' ] || [ "$char" = $'\t' ]; then
+                        # 空格或制表符，结束当前路径
+                        if [ -n "$current_path" ]; then
+                            result_array+=("$current_path")
+                            current_path=""
+                        fi
+                    else
+                        current_path="${current_path}${char}"
+                    fi
+                else
+                    if [ "$char" = "$quote_char" ]; then
+                        in_quotes=false
+                        quote_char=""
+                    else
+                        current_path="${current_path}${char}"
+                    fi
+                fi
+                
+                ((i++))
+            done
+            
+            # 添加最后一个路径
+            if [ -n "$current_path" ]; then
+                result_array+=("$current_path")
+            fi
+            
+            rm -f "$temp_file"
+        fi
+        
+        # 去除空元素
+        local temp_array=()
+        for path in "${result_array[@]}"; do
+            if [ -n "$path" ]; then
+                temp_array+=("$path")
+            fi
+        done
+        result_array=("${temp_array[@]}")
+        
+        echo "   ✅ 成功解析为 ${#result_array[@]} 个路径" >&2
+    fi
+}
+
 # 功能1：向文件末尾追加固定1100字节的数据（100字节标志位 + 1000字节内容）
 # 参数1: 要写入的字符串
 # 参数2: 目标文件路径
