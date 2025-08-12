@@ -160,7 +160,7 @@ function read_and_remove_fixed_bytes() {
     return 0
 }
 
-# 功能3：遍历文件夹并处理文件
+# 功能3：遍历文件夹并处理文件 - 优化版
 # 参数1: 文件路径列表字符串 (如 "/Users/cc/Desktop/test/oppp/v{1..40}" 或 "/v30")
 function process_folders() {
     local file_path_list_string="$1"
@@ -178,33 +178,38 @@ function process_folders() {
     echo "🚫 跳过条件: 存在后缀为 '$file_suffix_string' 的文件"
     echo ""
     
-    # 展开路径列表 (处理 {1..40} 这样的bash扩展)
-    local path_array
-    # 临时启用bash的大括号展开，然后安全地展开路径
-    set +f  # 启用文件名展开
-    eval "path_array=($file_path_list_string)"
-    set -f  # 重新禁用文件名展开以避免意外展开
+    # 展开路径列表的函数
+    local path_array=()
     
-    # 如果展开失败或者只有一个元素且包含大括号，尝试手动处理
-    if [ ${#path_array[@]} -eq 1 ] && [[ "${path_array[0]}" == *"{"* ]]; then
+    # 处理大括号扩展
+    if [[ "$file_path_list_string" == *"{"*".."*"}"* ]]; then
         echo "🔧 检测到大括号语法，手动展开路径..."
-        local original_path="${path_array[0]}"
         
-        # 检查是否包含 {数字..数字} 模式
-        if [[ "$original_path" =~ \{([0-9]+)\.\.([0-9]+)\} ]]; then
+        # 提取大括号内容
+        if [[ "$file_path_list_string" =~ \{([0-9]+)\.\.([0-9]+)\} ]]; then
             local start_num="${BASH_REMATCH[1]}"
             local end_num="${BASH_REMATCH[2]}"
-            local base_path="${original_path%\{*\}*}"  # 获取大括号前的部分
-            local suffix_path="${original_path#*\}}"   # 获取大括号后的部分
+            local base_path="${file_path_list_string%\{*\}*}"  # 获取大括号前的部分
+            local suffix_path="${file_path_list_string#*\}}"   # 获取大括号后的部分
             
             # 重新构建路径数组
-            path_array=()
             for ((i=start_num; i<=end_num; i++)); do
                 path_array+=("${base_path}${i}${suffix_path}")
             done
             
             echo "   ✅ 成功展开为 ${#path_array[@]} 个路径 (${base_path}${start_num}${suffix_path} 到 ${base_path}${end_num}${suffix_path})"
         fi
+    else
+        # 处理空格分隔的路径列表，使用IFS正确分割
+        IFS=' ' read -ra path_array <<< "$file_path_list_string"
+        # 去除空元素
+        local temp_array=()
+        for path in "${path_array[@]}"; do
+            if [ -n "$path" ]; then
+                temp_array+=("$path")
+            fi
+        done
+        path_array=("${temp_array[@]}")
     fi
     
     local processed_count=0
@@ -212,7 +217,7 @@ function process_folders() {
     
     # 遍历每个路径
     for path in "${path_array[@]}"; do
-        echo "📁 处理文件夹: $path"
+        echo "📁 处理文件夹: '$path'"
         
         # 检查文件夹是否存在
         if [ ! -d "$path" ]; then
@@ -221,17 +226,18 @@ function process_folders() {
             continue
         fi
         
-        # 使用while read循环安全处理包含空格的文件名
+        # 使用while read循环安全处理包含空格和特殊字符的文件名
         local has_tmp_file=false
         local files_processed=0
         local files_deleted=0
         
         # 第一遍：检查是否存在以指定后缀结尾的文件
         while IFS= read -r -d '' file_path; do
-            local filename=$(basename "$file_path")
+            local filename
+            filename=$(basename "$file_path")
             if [[ "$filename" == *"$file_suffix_string" ]]; then
                 has_tmp_file=true
-                echo "   🚫 发现后缀文件: $filename，跳过此文件夹"
+                echo "   🚫 发现后缀文件: '$filename'，跳过此文件夹"
                 break
             fi
         done < <(find "$path" -maxdepth 1 -type f -print0 2>/dev/null)
@@ -243,7 +249,8 @@ function process_folders() {
         fi
         
         # 检查文件夹是否为空
-        local file_count=$(find "$path" -maxdepth 1 -type f 2>/dev/null | wc -l)
+        local file_count
+        file_count=$(find "$path" -maxdepth 1 -type f 2>/dev/null | wc -l)
         if [ "$file_count" -eq 0 ]; then
             echo "   📝 文件夹为空，跳过"
             echo ""
@@ -254,19 +261,19 @@ function process_folders() {
         echo "   ✅ 开始处理文件夹中的文件"
         
         while IFS= read -r -d '' file_path; do
-            local filename=$(basename "$file_path")
+            local filename
+            filename=$(basename "$file_path")
             
             # 调试信息：显示正在处理的文件
             echo "   🔍 处理文件: '$filename'"
             
             if [ "$filename" = "url" ]; then
-                echo "   🗑️  删除文件: $file_path"
-                rm -f "$file_path"
-                if [ $? -eq 0 ]; then
+                echo "   🗑️  删除文件: '$file_path'"
+                if rm -f "$file_path"; then
                     ((files_deleted++))
-                    echo "   ✅ 成功删除: $file_path"
+                    echo "   ✅ 成功删除: '$file_path'"
                 else
-                    echo "   ❌ 删除失败: $file_path"
+                    echo "   ❌ 删除失败: '$file_path'"
                 fi
             else
                 echo "   📝 使用write_fixed_bytes给文件 '$file_path' 末尾追加文件名 '$filename'"
@@ -274,7 +281,7 @@ function process_folders() {
                 if [ $? -eq 0 ]; then
                     ((files_processed++))
                 else
-                    echo "   ❌ 追加数据失败: $file_path"
+                    echo "   ❌ 追加数据失败: '$file_path'"
                 fi
             fi
         done < <(find "$path" -maxdepth 1 -type f -print0 2>/dev/null)
@@ -292,7 +299,7 @@ function process_folders() {
     echo ""
 }
 
-# 功能4：遍历文件夹并还原文件名（与功能3相反）
+# 功能4：遍历文件夹并还原文件名（与功能3相反）- 优化版
 # 参数1: 文件路径列表字符串 (如 "/Users/cc/Desktop/test/oppp/v{1..40}" 或 "/v30")
 function restore_file_names() {
     local file_path_list_string="$1"
@@ -309,41 +316,45 @@ function restore_file_names() {
     echo "📖 操作: 读取文件末尾1100字节作为新文件名"
     echo ""
     
-    # 展开路径列表 (处理 {1..40} 这样的bash扩展)
-    local path_array
-    # 临时启用bash的大括号展开，然后安全地展开路径
-    set +f  # 启用文件名展开
-    eval "path_array=($file_path_list_string)"
-    set -f  # 重新禁用文件名展开以避免意外展开
+    # 展开路径列表
+    local path_array=()
     
-    # 如果展开失败或者只有一个元素且包含大括号，尝试手动处理
-    if [ ${#path_array[@]} -eq 1 ] && [[ "${path_array[0]}" == *"{"* ]]; then
+    # 处理大括号扩展
+    if [[ "$file_path_list_string" == *"{"*".."*"}"* ]]; then
         echo "🔧 检测到大括号语法，手动展开路径..."
-        local original_path="${path_array[0]}"
         
-        # 检查是否包含 {数字..数字} 模式
-        if [[ "$original_path" =~ \{([0-9]+)\.\.([0-9]+)\} ]]; then
+        # 提取大括号内容
+        if [[ "$file_path_list_string" =~ \{([0-9]+)\.\.([0-9]+)\} ]]; then
             local start_num="${BASH_REMATCH[1]}"
             local end_num="${BASH_REMATCH[2]}"
-            local base_path="${original_path%\{*\}*}"  # 获取大括号前的部分
-            local suffix_path="${original_path#*\}}"   # 获取大括号后的部分
+            local base_path="${file_path_list_string%\{*\}*}"  # 获取大括号前的部分
+            local suffix_path="${file_path_list_string#*\}}"   # 获取大括号后的部分
             
             # 重新构建路径数组
-            path_array=()
             for ((i=start_num; i<=end_num; i++)); do
                 path_array+=("${base_path}${i}${suffix_path}")
             done
             
             echo "   ✅ 成功展开为 ${#path_array[@]} 个路径 (${base_path}${start_num}${suffix_path} 到 ${base_path}${end_num}${suffix_path})"
         fi
+    else
+        # 处理空格分隔的路径列表，使用IFS正确分割
+        IFS=' ' read -ra path_array <<< "$file_path_list_string"
+        # 去除空元素
+        local temp_array=()
+        for path in "${path_array[@]}"; do
+            if [ -n "$path" ]; then
+                temp_array+=("$path")
+            fi
+        done
+        path_array=("${temp_array[@]}")
     fi
     
     local processed_count=0
-    local error_count=0
     
     # 遍历每个路径
     for path in "${path_array[@]}"; do
-        echo "📁 处理文件夹: $path"
+        echo "📁 处理文件夹: '$path'"
         
         # 检查文件夹是否存在
         if [ ! -d "$path" ]; then
@@ -353,7 +364,8 @@ function restore_file_names() {
         fi
         
         # 检查文件夹是否为空
-        local file_count=$(find "$path" -maxdepth 1 -type f 2>/dev/null | wc -l)
+        local file_count
+        file_count=$(find "$path" -maxdepth 1 -type f 2>/dev/null | wc -l)
         if [ "$file_count" -eq 0 ]; then
             echo "   📝 文件夹为空，跳过"
             echo ""
@@ -365,17 +377,20 @@ function restore_file_names() {
         local files_processed=0
         local files_failed=0
         
-        # 使用while read循环安全处理包含空格的文件名
+        # 使用while read循环安全处理包含空格和特殊字符的文件名
         while IFS= read -r -d '' file_path; do
-            local original_filename=$(basename "$file_path")
-            local file_dir=$(dirname "$file_path")
+            local original_filename
+            original_filename=$(basename "$file_path")
+            local file_dir
+            file_dir=$(dirname "$file_path")
             
             # 调试信息：显示正在处理的文件
             echo "   🔍 处理文件: '$original_filename'"
             
             # 调用功能2读取末尾1100字节并获取字符串
             local get_name_string
-            local error_temp_file=$(mktemp)
+            local error_temp_file
+            error_temp_file=$(mktemp)
             get_name_string=$(read_and_remove_fixed_bytes "$file_path" 2>"$error_temp_file")
             local read_result=$?
             
@@ -388,13 +403,13 @@ function restore_file_names() {
                 # 检查目标文件是否已存在
                 if [ -f "$new_file_path" ] && [ "$file_path" != "$new_file_path" ]; then
                     echo "   ⚠️  警告: 目标文件 '$get_name_string' 已存在，添加时间戳后缀"
-                    local timestamp=$(date +"%Y%m%d_%H%M%S")
+                    local timestamp
+                    timestamp=$(date +"%Y%m%d_%H%M%S")
                     new_file_path="$file_dir/${get_name_string}_${timestamp}"
                 fi
                 
                 # 重命名文件
-                mv "$file_path" "$new_file_path"
-                if [ $? -eq 0 ]; then
+                if mv "$file_path" "$new_file_path"; then
                     ((files_processed++))
                     echo "   ✅ 成功重命名: '$new_file_path'"
                 else
@@ -440,7 +455,7 @@ function getFileName() {
     
     # 检查索引文件是否存在，不存在则创建并初始化为1
     if [ ! -f "$indexFile" ]; then
-        echo "📝 索引文件不存在，创建并初始化: $indexFile" >&2
+        echo "📝 索引文件不存在，创建并初始化: '$indexFile'" >&2
         echo "1" > "$indexFile"
         if [ $? -eq 0 ]; then
             echo "   ✅ 成功创建索引文件" >&2
@@ -453,7 +468,7 @@ function getFileName() {
     # 读取当前索引值
     local index
     if ! index=$(cat "$indexFile" 2>/dev/null); then
-        echo "❌ 错误: 无法读取索引文件 $indexFile" >&2
+        echo "❌ 错误: 无法读取索引文件 '$indexFile'" >&2
         return 1
     fi
     
@@ -484,7 +499,6 @@ function getFileName() {
     return 0
 }
 
-
 # 功能6：根据文件后缀判断是否为视频文件
 # 参数1: 文件路径
 # 返回: 0表示是视频文件，1表示不是视频文件
@@ -512,7 +526,8 @@ function isVideoFileFunction() {
     fi
     
     # 将后缀转换为小写
-    local file_suffix_string_allLowercase=$(echo "$file_suffix_string" | tr '[:upper:]' '[:lower:]')
+    local file_suffix_string_allLowercase
+    file_suffix_string_allLowercase=$(echo "$file_suffix_string" | tr '[:upper:]' '[:lower:]')
     
     # 定义视频文件后缀列表
     local video_extensions=(
@@ -532,7 +547,7 @@ function isVideoFileFunction() {
     return 1  # 不是视频文件
 }
 
-# 功能7：给视频文件末尾追加1100字节信息
+# 功能7：给视频文件末尾追加1100字节信息 - 优化版
 # 参数1: 文件夹路径
 function processVideoFiles() {
     local folderPath="$1"
@@ -570,15 +585,18 @@ function processVideoFiles() {
         local relative_path="${current_dir#$folderPath}"
         [ -z "$relative_path" ] && relative_path="/"
         
-        echo "📁 进入文件夹: $(basename "$current_dir") $relative_path"
+        local current_dirname
+        current_dirname=$(basename "$current_dir")
+        echo "📁 进入文件夹: '$current_dirname' $relative_path"
         
         # 检查当前文件夹是否存在以file_suffix_string为后缀的文件
         local has_tmp_file=false
         while IFS= read -r -d '' file_path; do
-            local filename=$(basename "$file_path")
+            local filename
+            filename=$(basename "$file_path")
             if [[ "$filename" == *"$file_suffix_string" ]]; then
                 has_tmp_file=true
-                echo "   🚫 发现后缀文件: $filename，跳过此文件夹及其子文件夹"
+                echo "   🚫 发现后缀文件: '$filename'，跳过此文件夹及其子文件夹"
                 ((skipped_folders++))
                 break
             fi
@@ -593,8 +611,10 @@ function processVideoFiles() {
         # 处理当前文件夹中的文件
         while IFS= read -r -d '' file_path; do
             ((total_files++))
-            local filename=$(basename "$file_path")
-            local file_size=$(stat -c%s "$file_path" 2>/dev/null || stat -f%z "$file_path" 2>/dev/null)
+            local filename
+            filename=$(basename "$file_path")
+            local file_size
+            file_size=$(stat -c%s "$file_path" 2>/dev/null || stat -f%z "$file_path" 2>/dev/null)
             
             # 显示当前处理的文件
             echo "   🔍 检查文件: '$filename'"
@@ -648,8 +668,7 @@ function processVideoFiles() {
     echo ""
 }
 
-
-# 功能8：识别脚本默认追加的文件并移动到指定文件夹
+# 功能8：识别脚本默认追加的文件并移动到指定文件夹 - 优化版
 # 参数1: 文件夹路径
 function moveProcessedFiles() {
     local folderPath="$1"
@@ -677,8 +696,7 @@ function moveProcessedFiles() {
     # 检查目标文件夹是否存在，不存在则创建
     if [ ! -d "$target_folder" ]; then
         echo "📝 目标文件夹不存在，正在创建: '$target_folder'"
-        mkdir -p "$target_folder"
-        if [ $? -eq 0 ]; then
+        if mkdir -p "$target_folder"; then
             echo "   ✅ 成功创建目标文件夹"
         else
             echo "   ❌ 创建目标文件夹失败"
@@ -695,7 +713,8 @@ function moveProcessedFiles() {
     # 递归遍历文件夹中的所有文件
     while IFS= read -r -d '' file_path; do
         ((total_files++))
-        local filename=$(basename "$file_path")
+        local filename
+        filename=$(basename "$file_path")
         local relative_path="${file_path#$folderPath/}"
         
         # 显示当前处理的文件及其相对路径
@@ -728,8 +747,10 @@ function moveProcessedFiles() {
         echo "   📏 文件大小: $file_size 字节"
         
         # 创建临时文件
-        local temp_file=$(mktemp)
-        local mark_temp_file=$(mktemp)
+        local temp_file
+        temp_file=$(mktemp)
+        local mark_temp_file
+        mark_temp_file=$(mktemp)
         
         # 确保临时文件创建成功
         if [ -z "$temp_file" ] || [ -z "$mark_temp_file" ] || [ ! -f "$temp_file" ] || [ ! -f "$mark_temp_file" ]; then
@@ -748,7 +769,8 @@ function moveProcessedFiles() {
         fi
         
         # 检查提取的数据大小
-        local extracted_size=$(wc -c < "$temp_file" 2>/dev/null)
+        local extracted_size
+        extracted_size=$(wc -c < "$temp_file" 2>/dev/null)
         if [ -z "$extracted_size" ] || [ "$extracted_size" -lt 100 ]; then
             echo "   ❌ 提取的数据不足100字节"
             rm -f "$temp_file" "$mark_temp_file"
@@ -779,13 +801,14 @@ function moveProcessedFiles() {
             
             # 调用getFileName获取新文件名
             local new_name_string
-            new_name_string=$(getFileName "$file_path" 2>/dev/null)
+            new_name_string=$(getFileName 2>/dev/null)
             local get_name_result=$?
             
             if [ $get_name_result -eq 0 ] && [ -n "$new_name_string" ]; then
                 echo "   🏷️  生成新文件名: '$new_name_string'"
                 
-                local file_dir=$(dirname "$file_path")
+                local file_dir
+                file_dir=$(dirname "$file_path")
                 local temp_new_path="$file_dir/$new_name_string"
                 
                 # 检查新文件名是否与原文件名相同
@@ -812,7 +835,8 @@ function moveProcessedFiles() {
                 # 检查目标位置是否已有同名文件
                 if [ -f "$final_target_path" ]; then
                     echo "   ⚠️  目标位置已存在同名文件，添加时间戳后缀"
-                    local timestamp=$(date +"%Y%m%d_%H%M%S_%N" 2>/dev/null || date +"%Y%m%d_%H%M%S")
+                    local timestamp
+                    timestamp=$(date +"%Y%m%d_%H%M%S_%N" 2>/dev/null || date +"%Y%m%d_%H%M%S")
                     local name_without_ext="${new_name_string%.*}"
                     local ext="${new_name_string##*.}"
                     if [ "$name_without_ext" = "$new_name_string" ]; then
@@ -824,7 +848,9 @@ function moveProcessedFiles() {
                     fi
                 fi
                 
-                echo "   📦 移动文件到: '$(basename "$final_target_path")'"
+                local final_target_basename
+                final_target_basename=$(basename "$final_target_path")
+                echo "   📦 移动文件到: '$final_target_basename'"
                 if mv "$temp_new_path" "$final_target_path"; then
                     ((moved_files++))
                     echo "   🎉 成功移动文件"
@@ -861,7 +887,6 @@ function moveProcessedFiles() {
     echo ""
 }
 
-
 # 功能9：查看文件末尾1100字节的原始文件名（不删除数据）
 # 参数1: 文件路径
 # 返回: 读取到的内容字符串（通过echo输出）
@@ -882,7 +907,8 @@ function view_original_names() {
     fi
     
     # 获取文件大小
-    local file_size=$(wc -c < "$file_path")
+    local file_size
+    file_size=$(wc -c < "$file_path")
     
     # 检查文件是否至少有1100字节
     if [ $file_size -lt 1100 ]; then
@@ -896,12 +922,15 @@ function view_original_names() {
     echo "" >&2
     
     # 使用dd直接读取末尾1100字节，避免管道问题
-    local temp_file=$(mktemp)
+    local temp_file
+    temp_file=$(mktemp)
     tail -c 1100 "$file_path" > "$temp_file"
     
     # 使用dd分离前100字节（标志位）和后1000字节（内容数据）
-    local mark_temp_file=$(mktemp)
-    local content_temp_file=$(mktemp)
+    local mark_temp_file
+    mark_temp_file=$(mktemp)
+    local content_temp_file
+    content_temp_file=$(mktemp)
     
     # 读取前100字节（标志位）
     dd if="$temp_file" of="$mark_temp_file" bs=1 count=100 2>/dev/null
@@ -910,7 +939,8 @@ function view_original_names() {
     dd if="$temp_file" of="$content_temp_file" bs=1 skip=100 count=1000 2>/dev/null
     
     # 将100字节标志位还原为字符串（去除null字符）
-    local mark_string=$(cat "$mark_temp_file" | tr -d '\0')
+    local mark_string
+    mark_string=$(cat "$mark_temp_file" | tr -d '\0')
     
     # 验证标志位
     echo "🔍 标志位验证:" >&2
@@ -929,7 +959,8 @@ function view_original_names() {
     echo "   ✅ 成功" >&2
     
     # 将1000字节内容数据还原为字符串（去除null字符）
-    local content_string=$(cat "$content_temp_file" | tr -d '\0')
+    local content_string
+    content_string=$(cat "$content_temp_file" | tr -d '\0')
     
     # 清理临时文件
     rm -f "$temp_file" "$mark_temp_file" "$content_temp_file"
@@ -946,7 +977,9 @@ function view_original_names() {
     return 0
 }
 
-# 功能10：批量查看文件夹中文件的原始文件名
+
+
+# 功能10：批量查看文件夹中文件的原始文件名 - 优化版
 # 参数1: 文件路径列表字符串 (如 "/Users/cc/Desktop/test/oppp/v{1..40}" 或 "/v30")
 function batch_view_original_names() {
     local file_path_list_string="$1"
@@ -963,33 +996,38 @@ function batch_view_original_names() {
     echo "📖 操作: 读取文件末尾1100字节获取原始文件名（不删除数据）"
     echo ""
     
-    # 展开路径列表 (处理 {1..40} 这样的bash扩展)
-    local path_array
-    # 临时启用bash的大括号展开，然后安全地展开路径
-    set +f  # 启用文件名展开
-    eval "path_array=($file_path_list_string)"
-    set -f  # 重新禁用文件名展开以避免意外展开
+    # 展开路径列表
+    local path_array=()
     
-    # 如果展开失败或者只有一个元素且包含大括号，尝试手动处理
-    if [ ${#path_array[@]} -eq 1 ] && [[ "${path_array[0]}" == *"{"* ]]; then
+    # 处理大括号扩展
+    if [[ "$file_path_list_string" == *"{"*".."*"}"* ]]; then
         echo "🔧 检测到大括号语法，手动展开路径..."
-        local original_path="${path_array[0]}"
         
-        # 检查是否包含 {数字..数字} 模式
-        if [[ "$original_path" =~ \{([0-9]+)\.\.([0-9]+)\} ]]; then
+        # 提取大括号内容
+        if [[ "$file_path_list_string" =~ \{([0-9]+)\.\.([0-9]+)\} ]]; then
             local start_num="${BASH_REMATCH[1]}"
             local end_num="${BASH_REMATCH[2]}"
-            local base_path="${original_path%\{*\}*}"  # 获取大括号前的部分
-            local suffix_path="${original_path#*\}}"   # 获取大括号后的部分
+            local base_path="${file_path_list_string%\{*\}*}"  # 获取大括号前的部分
+            local suffix_path="${file_path_list_string#*\}}"   # 获取大括号后的部分
             
             # 重新构建路径数组
-            path_array=()
             for ((i=start_num; i<=end_num; i++)); do
                 path_array+=("${base_path}${i}${suffix_path}")
             done
             
             echo "   ✅ 成功展开为 ${#path_array[@]} 个路径 (${base_path}${start_num}${suffix_path} 到 ${base_path}${end_num}${suffix_path})"
         fi
+    else
+        # 处理空格分隔的路径列表，使用IFS正确分割
+        IFS=' ' read -ra path_array <<< "$file_path_list_string"
+        # 去除空元素
+        local temp_array=()
+        for path in "${path_array[@]}"; do
+            if [ -n "$path" ]; then
+                temp_array+=("$path")
+            fi
+        done
+        path_array=("${temp_array[@]}")
     fi
     
     local processed_count=0
@@ -998,7 +1036,7 @@ function batch_view_original_names() {
     
     # 遍历每个路径
     for path in "${path_array[@]}"; do
-        echo "📁 处理文件夹: $path"
+        echo "📁 处理文件夹: '$path'"
         
         # 检查文件夹是否存在
         if [ ! -d "$path" ]; then
@@ -1008,7 +1046,8 @@ function batch_view_original_names() {
         fi
         
         # 检查文件夹是否为空
-        local file_count=$(find "$path" -maxdepth 1 -type f 2>/dev/null | wc -l)
+        local file_count
+        file_count=$(find "$path" -maxdepth 1 -type f 2>/dev/null | wc -l)
         if [ "$file_count" -eq 0 ]; then
             echo "   📝 文件夹为空，跳过"
             echo ""
@@ -1020,16 +1059,18 @@ function batch_view_original_names() {
         local files_success=0
         local files_failed=0
         
-        # 使用while read循环安全处理包含空格的文件名
+        # 使用while read循环安全处理包含空格和特殊字符的文件名
         while IFS= read -r -d '' file_path; do
-            local current_filename=$(basename "$file_path")
+            local current_filename
+            current_filename=$(basename "$file_path")
             
             # 调试信息：显示正在处理的文件
             echo "     🔍 查看文件: '$current_filename'"
             
             # 调用view_original_names函数查看原始文件名
             local original_name_string
-            local error_temp_file=$(mktemp)
+            local error_temp_file
+            error_temp_file=$(mktemp)
             original_name_string=$(view_original_names "$file_path" 2>"$error_temp_file")
             local view_result=$?
             
