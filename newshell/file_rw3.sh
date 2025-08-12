@@ -261,8 +261,7 @@ function read_and_remove_fixed_bytes() {
     return 0
 }
 
-# 功能3：遍历文件夹并处理文件 - 优化版
-# 参数1: 文件路径列表字符串 (如 "/Users/cc/Desktop/test/oppp/v{1..40}" 或 "/v30")
+# 功能3：遍历文件夹并处理文件 - 优化版（修复路径解析问题）
 function process_folders() {
     local file_path_list_string="$1"
     local file_suffix_string="tmpfile"
@@ -271,7 +270,10 @@ function process_folders() {
     if [ -z "$file_path_list_string" ]; then
         echo "❌ 错误: 文件路径列表不能为空"
         echo "用法: process_folders <文件路径列表>"
-        echo "示例: process_folders \"/Users/cc/Desktop/test/oppp/v{1..40}\" 或 process_folders \"/v30\""
+        echo "示例: process_folders \"/Users/cc/Desktop/test/oppp/v{1..40}\""
+        echo "      process_folders \"/v30\""
+        echo "      process_folders \"/path/with spaces\" \"/another/path\""
+        echo "      process_folders $'/path1\\n/path2\\n/path with spaces'"
         return 1
     fi
     
@@ -279,39 +281,9 @@ function process_folders() {
     echo "🚫 跳过条件: 存在后缀为 '$file_suffix_string' 的文件"
     echo ""
     
-    # 展开路径列表的函数
+    # 使用新的路径解析函数
     local path_array=()
-    
-    # 处理大括号扩展
-    if [[ "$file_path_list_string" == *"{"*".."*"}"* ]]; then
-        echo "🔧 检测到大括号语法，手动展开路径..."
-        
-        # 提取大括号内容
-        if [[ "$file_path_list_string" =~ \{([0-9]+)\.\.([0-9]+)\} ]]; then
-            local start_num="${BASH_REMATCH[1]}"
-            local end_num="${BASH_REMATCH[2]}"
-            local base_path="${file_path_list_string%\{*\}*}"  # 获取大括号前的部分
-            local suffix_path="${file_path_list_string#*\}}"   # 获取大括号后的部分
-            
-            # 重新构建路径数组
-            for ((i=start_num; i<=end_num; i++)); do
-                path_array+=("${base_path}${i}${suffix_path}")
-            done
-            
-            echo "   ✅ 成功展开为 ${#path_array[@]} 个路径 (${base_path}${start_num}${suffix_path} 到 ${base_path}${end_num}${suffix_path})"
-        fi
-    else
-        # 处理空格分隔的路径列表，使用IFS正确分割
-        IFS=' ' read -ra path_array <<< "$file_path_list_string"
-        # 去除空元素
-        local temp_array=()
-        for path in "${path_array[@]}"; do
-            if [ -n "$path" ]; then
-                temp_array+=("$path")
-            fi
-        done
-        path_array=("${temp_array[@]}")
-    fi
+    parse_path_list "$file_path_list_string" path_array
     
     local processed_count=0
     local skipped_count=0
