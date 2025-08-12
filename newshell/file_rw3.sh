@@ -955,7 +955,7 @@ function moveProcessedFiles() {
     echo ""
 }
 
-# 功能9：查看文件末尾1100字节的原始文件名（不删除数据）
+# 功能9：查看文件末尾1100字节的原始文件名（不删除数据）- 修复中文字符问题
 # 参数1: 文件路径
 # 返回: 读取到的内容字符串（通过echo输出）
 function view_original_names() {
@@ -1006,9 +1006,9 @@ function view_original_names() {
     # 读取后1000字节（内容数据）
     dd if="$temp_file" of="$content_temp_file" bs=1 skip=100 count=1000 2>/dev/null
     
-    # 将100字节标志位还原为字符串（去除null字符）
+    # 将100字节标志位还原为字符串 - 改进的方法
     local mark_string
-    mark_string=$(cat "$mark_temp_file" | tr -d '\0')
+    mark_string=$(cat "$mark_temp_file" | sed 's/\x00*$//')  # 去除末尾的null字符
     
     # 验证标志位
     echo "🔍 标志位验证:" >&2
@@ -1017,6 +1017,7 @@ function view_original_names() {
     
     if [ "$mark_string" != "FKY996" ]; then
         echo "   ❌ 失败 (检测到: '$mark_string'，期望: 'FKY996')" >&2
+        echo "🔍 标志位字节内容(hex): $(cat "$mark_temp_file" | xxd -l 20 -p)" >&2
         echo "❌ 错误: 文件非通过本脚本追加写入生成的文件" >&2
         
         # 清理临时文件
@@ -1026,9 +1027,13 @@ function view_original_names() {
     
     echo "   ✅ 成功" >&2
     
-    # 将1000字节内容数据还原为字符串（去除null字符）
+    # 将1000字节内容数据还原为字符串 - 改进的方法
     local content_string
-    content_string=$(cat "$content_temp_file" | tr -d '\0')
+    content_string=$(cat "$content_temp_file" | sed 's/\x00*$//')  # 去除末尾的null字符
+    
+    # 获取内容的字节长度
+    local content_byte_length
+    content_byte_length=$(get_byte_length "$content_string")
     
     # 清理临时文件
     rm -f "$temp_file" "$mark_temp_file" "$content_temp_file"
@@ -1037,6 +1042,7 @@ function view_original_names() {
     echo "📋 读取结果:" >&2
     echo "🏷️  标志位: '$mark_string' ✅" >&2
     echo "📝 原始文件名: '$content_string'" >&2
+    echo "📊 内容字节长度: $content_byte_length 字节, 字符数量: ${#content_string}" >&2
     echo "📊 数据结构: 100字节标志位 + 1000字节内容" >&2
     echo "" >&2
     
