@@ -1,5 +1,12 @@
 #!/bin/bash
 
+# 获取字符串的字节长度（支持中文和特殊字符）
+function get_byte_length() {
+    local str="$1"
+    # 方法1：使用 wc -c
+    echo -n "$str" | wc -c
+}
+
 # 通用路径列表解析函数
 function parse_path_list() {
     local file_path_list_string="$1"
