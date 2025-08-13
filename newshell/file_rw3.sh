@@ -766,8 +766,7 @@ function processVideoFiles() {
     echo ""
 }
 
-# 功能8：识别脚本默认追加的文件并移动到指定文件夹 - 优化版
-# 参数1: 文件夹路径
+# 功能8：识别脚本默认追加的文件并移动到指定文件夹 - 修复版本
 function moveProcessedFiles() {
     local folderPath="$1"
     local target_folder="/p2"
@@ -825,15 +824,9 @@ function moveProcessedFiles() {
             continue
         fi
         
-        # 获取文件大小 - 使用更可靠的方法
+        # 获取文件大小
         local file_size
-        if command -v stat >/dev/null 2>&1; then
-            # 优先使用stat命令（支持Linux和macOS）
-            file_size=$(stat -c%s "$file_path" 2>/dev/null || stat -f%z "$file_path" 2>/dev/null)
-        else
-            # 备用方法
-            file_size=$(wc -c < "$file_path" 2>/dev/null)
-        fi
+        file_size=$(wc -c < "$file_path" 2>/dev/null)
         
         # 检查文件是否至少有1100字节
         if [ -z "$file_size" ] || [ "$file_size" -lt 1100 ]; then
@@ -845,32 +838,12 @@ function moveProcessedFiles() {
         echo "   📏 文件大小: $file_size 字节"
         
         # 创建临时文件
-        local temp_file
-        temp_file=$(mktemp)
-        local mark_temp_file
-        mark_temp_file=$(mktemp)
-        
-        # 确保临时文件创建成功
-        if [ -z "$temp_file" ] || [ -z "$mark_temp_file" ] || [ ! -f "$temp_file" ] || [ ! -f "$mark_temp_file" ]; then
-            echo "   ❌ 创建临时文件失败"
-            rm -f "$temp_file" "$mark_temp_file" 2>/dev/null
-            echo ""
-            continue
-        fi
+        local temp_file=$(mktemp)
+        local mark_temp_file=$(mktemp)
         
         # 读取文件末尾1100字节
         if ! tail -c 1100 "$file_path" > "$temp_file" 2>/dev/null; then
             echo "   ❌ 读取文件末尾数据失败"
-            rm -f "$temp_file" "$mark_temp_file"
-            echo ""
-            continue
-        fi
-        
-        # 检查提取的数据大小
-        local extracted_size
-        extracted_size=$(wc -c < "$temp_file" 2>/dev/null)
-        if [ -z "$extracted_size" ] || [ "$extracted_size" -lt 100 ]; then
-            echo "   ❌ 提取的数据不足100字节"
             rm -f "$temp_file" "$mark_temp_file"
             echo ""
             continue
@@ -884,11 +857,11 @@ function moveProcessedFiles() {
             continue
         fi
         
-        # 将标志位转换为字符串 - 更安全的方法
+        # 将标志位转换为字符串
         local mark_string
-        mark_string=$(cat "$mark_temp_file" 2>/dev/null | tr -d '\0' | head -c 100)
+        mark_string=$(cat "$mark_temp_file" 2>/dev/null | tr -d '\0')
         
-        # 调试信息：显示标志位内容（前20个字符）
+        # 调试信息：显示标志位内容
         local debug_mark="${mark_string:0:20}"
         echo "   🔍 检测到标志位: '${debug_mark}...'"
         
@@ -905,29 +878,7 @@ function moveProcessedFiles() {
             if [ $get_name_result -eq 0 ] && [ -n "$new_name_string" ]; then
                 echo "   🏷️  生成新文件名: '$new_name_string'"
                 
-                local file_dir
-                file_dir=$(dirname "$file_path")
-                local temp_new_path="$file_dir/$new_name_string"
-                
-                # 检查新文件名是否与原文件名相同
-                if [ "$filename" = "$new_name_string" ]; then
-                    echo "   ℹ️  文件名无需更改，直接移动"
-                    temp_new_path="$file_path"
-                else
-                    # 第一步：重命名文件
-                    echo "   📝 重命名文件: '$filename' -> '$new_name_string'"
-                    if mv "$file_path" "$temp_new_path"; then
-                        echo "   ✅ 成功重命名文件"
-                    else
-                        ((failed_files++))
-                        echo "   ❌ 重命名文件失败"
-                        rm -f "$temp_file" "$mark_temp_file"
-                        echo ""
-                        continue
-                    fi
-                fi
-                
-                # 第二步：移动文件到目标文件夹
+                # 计算目标路径
                 local final_target_path="$target_folder/$new_name_string"
                 
                 # 检查目标位置是否已有同名文件
@@ -949,24 +900,25 @@ function moveProcessedFiles() {
                 local final_target_basename
                 final_target_basename=$(basename "$final_target_path")
                 echo "   📦 移动文件到: '$final_target_basename'"
-                if mv "$temp_new_path" "$final_target_path"; then
+                
+                # 直接移动文件，不重命名
+                if mv "$file_path" "$final_target_path"; then
                     ((moved_files++))
                     echo "   🎉 成功移动文件"
                 else
                     ((failed_files++))
                     echo "   ❌ 移动文件失败"
-                    # 如果重命名了但移动失败，尝试恢复原文件名
-                    if [ "$temp_new_path" != "$file_path" ]; then
-                        echo "   🔄 尝试恢复原文件名"
-                        mv "$temp_new_path" "$file_path" 2>/dev/null
-                    fi
+                    # 显示详细错误信息
+                    echo "     源文件: '$file_path'"
+                    echo "     目标文件: '$final_target_path'"
+                    echo "     错误可能原因: 权限不足、磁盘空间不足、或目标路径无效"
                 fi
             else
                 ((failed_files++))
                 echo "   ❌ 生成新文件名失败 (返回码: $get_name_result)"
             fi
         else
-            echo "   ⏭️  跳过: 非脚本处理文件"
+            echo "   ⏭️  跳过: 非脚本处理文件 (标志位: '$mark_string')"
         fi
         
         # 清理临时文件
