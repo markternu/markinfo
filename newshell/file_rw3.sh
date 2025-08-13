@@ -7,7 +7,7 @@ function get_byte_length() {
     echo -n "$str" | wc -c
 }
 
-# 通用路径列表解析函数
+# 通用路径列表解析函数 - 修复版本
 function parse_path_list() {
     local file_path_list_string="$1"
     local -n result_array=$2  # 使用nameref传递数组引用
@@ -33,7 +33,7 @@ function parse_path_list() {
             echo "   ✅ 成功展开为 ${#result_array[@]} 个路径 (${base_path}${start_num}${suffix_path} 到 ${base_path}${end_num}${suffix_path})" >&2
         fi
     else
-        # 处理路径列表 - 支持引号和换行分隔
+        # 处理路径列表 - 修复版本：更好地处理引号和空格
         echo "🔧 解析路径列表..." >&2
         
         # 首先尝试按换行分割
@@ -46,19 +46,17 @@ function parse_path_list() {
                 fi
             done <<< "$file_path_list_string"
         else
-            # 按空格分割，但正确处理引号
+            # 使用更安全的方法解析路径 - 支持引号包围的路径
             echo "   按空格分割路径，支持引号包围" >&2
             
-            # 使用eval和printf来正确处理引号
-            local temp_file=$(mktemp)
-            printf '%s\n' "$file_path_list_string" > "$temp_file"
-            
-            # 使用bash的read内建命令正确解析引号
+            # 使用bash的built-in功能来解析引号分隔的字符串
+            local temp_array=()
             local current_path=""
             local in_quotes=false
             local quote_char=""
             local i=0
             
+            # 逐字符解析，正确处理引号
             while [ $i -lt ${#file_path_list_string} ]; do
                 local char="${file_path_list_string:$i:1}"
                 
@@ -67,15 +65,16 @@ function parse_path_list() {
                         in_quotes=true
                         quote_char="$char"
                     elif [ "$char" = ' ' ] || [ "$char" = $'\t' ]; then
-                        # 空格或制表符，结束当前路径
+                        # 遇到空格，结束当前路径
                         if [ -n "$current_path" ]; then
-                            result_array+=("$current_path")
+                            temp_array+=("$current_path")
                             current_path=""
                         fi
                     else
                         current_path="${current_path}${char}"
                     fi
                 else
+                    # 在引号内
                     if [ "$char" = "$quote_char" ]; then
                         in_quotes=false
                         quote_char=""
@@ -89,13 +88,13 @@ function parse_path_list() {
             
             # 添加最后一个路径
             if [ -n "$current_path" ]; then
-                result_array+=("$current_path")
+                temp_array+=("$current_path")
             fi
             
-            rm -f "$temp_file"
+            result_array=("${temp_array[@]}")
         fi
         
-        # 去除空元素
+        # 去除空元素和处理引号
         local temp_array=()
         for path in "${result_array[@]}"; do
             if [ -n "$path" ]; then
@@ -105,8 +104,14 @@ function parse_path_list() {
         result_array=("${temp_array[@]}")
         
         echo "   ✅ 成功解析为 ${#result_array[@]} 个路径" >&2
+        
+        # 调试输出解析后的路径
+        for ((i=0; i<${#result_array[@]}; i++)); do
+            echo "     路径[$i]: '${result_array[i]}'" >&2
+        done
     fi
 }
+
 
 # 功能1：向文件末尾追加固定1100字节的数据（100字节标志位 + 1000字节内容）- 修复中文字符问题
 # 参数1: 要写入的字符串
