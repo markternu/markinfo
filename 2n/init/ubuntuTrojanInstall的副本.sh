@@ -64,7 +64,7 @@ After=network.target
 
 [Service]
 Type=simple
-ExecStart=/home/ubuntu/trojan/trojan -c /home/ubuntu/trojan/config.json
+ExecStart=/root/trojan/trojan -c /root/trojan/config.json
 Restart=always
 RestartSec=3
 
