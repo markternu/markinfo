@@ -10,9 +10,16 @@ fi
 read -p "请输入您的域名: " domain_name
 read -p "请输入代理密码: " proxy_password
 
+mkdir ak47
+cd /ak47
+
+
+
 # 安装必要的软件包
 apt-get update
 apt-get install -y nginx certbot python3-certbot-nginx wget unzip
+
+
 
 # 配置初始Nginx
 cat > /etc/nginx/sites-available/default << EOL
@@ -64,7 +71,7 @@ After=network.target
 
 [Service]
 Type=simple
-ExecStart=/home/ubuntu/trojan/trojan -c /home/ubuntu/trojan/config.json
+ExecStart=/ak47/trojan/trojan -c /ak47/trojan/config.json
 Restart=always
 RestartSec=3
 
