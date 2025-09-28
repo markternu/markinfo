@@ -10,8 +10,7 @@ fi
 read -p "请输入您的域名: " domain_name
 read -p "请输入ok密码: " proxy_password
 
-mkdir ak47
-cd /ak47
+
 
 
 
@@ -38,6 +37,9 @@ systemctl restart nginx
 certbot --nginx -d ${domain_name} --non-interactive --agree-tos --email webmaster@${domain_name}
 
 # 安装Trojan
+cd /
+mkdir ak47
+cd /ak47
 wget https://github.com/trojan-gfw/trojan/releases/download/v1.16.0/trojan-1.16.0-linux-amd64.tar.xz
 tar xf trojan-1.16.0-linux-amd64.tar.xz
 cd trojan
