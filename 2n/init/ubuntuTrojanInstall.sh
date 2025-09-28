@@ -8,7 +8,7 @@ fi
 
 # 获取用户输入
 read -p "请输入您的域名: " domain_name
-read -p "请输入代理密码: " proxy_password
+read -p "请输入ok密码: " proxy_password
 
 mkdir ak47
 cd /ak47
