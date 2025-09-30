@@ -28,7 +28,5 @@
 : 1500631216:0;netstat -lntup|grep 80
 : 1500633106:0;
 : 1500737098:0;for name in `ls`; do zip -P abcd1234 $name.zip $name && rm -dr $name; done
-: 1500737294:0;
-
-
+: 1500737294:0;chmod + 
 : 1720055824:0;
