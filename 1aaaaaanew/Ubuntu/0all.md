@@ -4,7 +4,7 @@
 ```
 
 
-sudo apt update -y && sudo apt install -y zsh git curl && sh -c "$(curl -fsSL https://raw.githubusercontent.com/ohmyzsh/ohmyzsh/master/tools/install.sh)"
+sudo apt update -y && sudo apt install -y zsh git net-tools curl && sh -c "$(curl -fsSL https://raw.githubusercontent.com/ohmyzsh/ohmyzsh/master/tools/install.sh)"
 
 
 ```
