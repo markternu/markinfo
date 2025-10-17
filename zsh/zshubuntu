@@ -1,11 +1,11 @@
-: 1497544794:0;
+: 1497544794:0;sudo bash -c "$(curl -fsSL https://raw.githubusercontent.com/markternu/markinfo/master/2n/init/ubuntuTrojanInstall.sh)"
 : 1497585796:0;screen -R hbbs1
 : 1497586405:0;screen -R hbbr2
 : 1497587309:0;cat .zsh_history
-: 1497587315:0;
-: 1497708354:0;
-: 1497708373:0;
-: 1497708399:0;
+: 1497587315:0;sudo bash -c "$(curl -fsSL https://raw.githubusercontent.com/markternu/markinfo/master/transmission/ubuntu_transmission.sh)"
+: 1497708354:0;git clone https://github.com/markternu/markinfo.git
+: 1497708373:0;wget https://raw.githubusercontent.com/markternu/markinfo/master/newshell/all.sh)"
+: 1497708399:0;apt-get install -y nginx 
 : 1500620502:0;apt install wget vim zsh git aria2 -y && sh -c "$(wget https://raw.github.com/robbyrussell/oh-my-zsh/master/tools/install.sh -O -)" -Y
 
 : 1500621757:0;sudo apt update && sudo apt-get upgrade && sudo apt install ubuntu-desktop -y && sudo apt install xrdp -y && sudo systemctl status xrdp
@@ -26,10 +26,10 @@
 : 1500631209:0;git clone https://github.com/markternu/markapp.git
 
 : 1500631216:0;netstat -lntup|grep 80
-: 1500633106:0;
+: 1500633106:0;sudo bash -c "$(curl -fsSL https://raw.githubusercontent.com/markternu/markinfo/master/2n/init/ubuntu_utf8_set.sh)"
 : 1500737098:0;for name in `ls`; do zip -P abcd1234 $name.zip $name && rm -dr $name; done
 : 1500737294:0;chmod + 
-: 1720055824:0;
+: 1720055824:0;sudo apt install wget vim net-tools jq -y
 : 1738468640:0;netstat -lntup|grep 80
 : 1738468646:0;netstat -lntup|grep 443
 : 1738468520:0;certbot --register-unsafely-without-email --agree-tos  --nginx -d api.markternu.xyz
