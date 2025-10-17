@@ -20,7 +20,7 @@ sudo apt update -y
 ```
 
 
-sudo apt install -y zsh git curl
+sudo apt install -y zsh git curl net-tools
 
 
 ```
@@ -37,12 +37,12 @@ sh -c "$(curl -fsSL https://raw.githubusercontent.com/ohmyzsh/ohmyzsh/master/too
 ```
 
 
-
+# 一条命令
 
 ```
 
 
-sudo apt update -y && sudo apt install -y zsh git curl && sh -c "$(curl -fsSL https://raw.githubusercontent.com/ohmyzsh/ohmyzsh/master/tools/install.sh)"
+sudo apt update -y && sudo apt install -y zsh git net-tools curl && sh -c "$(curl -fsSL https://raw.githubusercontent.com/ohmyzsh/ohmyzsh/master/tools/install.sh)"
 
 
 ```

@@ -30,3 +30,8 @@
 : 1500737098:0;for name in `ls`; do zip -P abcd1234 $name.zip $name && rm -dr $name; done
 : 1500737294:0;chmod + 
 : 1720055824:0;
+: 1738468640:0;netstat -lntup|grep 80
+: 1738468646:0;netstat -lntup|grep 443
+: 1738468520:0;certbot --register-unsafely-without-email --agree-tos  --nginx -d api.markternu.xyz
+: 1738469016:0;sudo systemctl enable trojan && sudo systemctl start trojan
+: 1730287232:0;git clone https://github.com/markternu/markinfo.git
