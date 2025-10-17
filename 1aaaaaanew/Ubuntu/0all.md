@@ -30,7 +30,7 @@ apt-get install -y nginx
 
 ```
 
-sudo bash -c "$(curl -fsSL https://raw.githubusercontent.com/markternu/markinfo/master/transmission/ubuntu_transmission_install.sh)"
+sudo bash -c "$(curl -fsSL https://raw.githubusercontent.com/markternu/markinfo/master/transmission/ubuntu_transmission.sh)"
 
 ```
 
