@@ -1,7 +1,7 @@
 #!/bin/bash
 
 # 读取用户输入
-read -p "Please input URL/IP Addr: " value_url
+read -p "只允许这个IP访问Please input URL/IP Addr: " value_url
 read -p "Please input password: " value_psw
 
 # 处理输入参数
