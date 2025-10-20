@@ -5,7 +5,8 @@
 # 解决多配置文件冲突问题，支持公网部署
 # ============================================================
 
-set -e  # 遇到错误立即退出
+# set -e 会在某些非关键命令失败时退出，所以不使用
+# 改为在关键步骤手动检查
 
 # 颜色定义
 GREEN='\033[0;32m'
@@ -280,15 +281,27 @@ echo -e "${GREEN}[10/11] 同步所有配置文件位置...${NC}"
 systemctl stop transmission-daemon
 sleep 3
 
+# 确认服务已完全停止
+if systemctl is-active --quiet transmission-daemon; then
+    echo -e "${YELLOW}⚠ 服务未完全停止，强制终止...${NC}"
+    killall -9 transmission-daemon 2>/dev/null || true
+    sleep 2
+fi
+
 # 获取主配置文件内容
 MAIN_CONFIG="/var/lib/transmission/.config/transmission-daemon/settings.json"
 
 # 强制更新白名单配置（确保不被 Transmission 改回去）
-jq --arg whitelist "$WHITELIST" --argjson enabled "$WHITELIST_ENABLED" \
+if jq --arg whitelist "$WHITELIST" --argjson enabled "$WHITELIST_ENABLED" \
    '.["rpc-whitelist"] = $whitelist | .["rpc-whitelist-enabled"] = $enabled | .["rpc-authentication-required"] = true' \
-   "$MAIN_CONFIG" > /tmp/settings_final.json
-
-mv /tmp/settings_final.json "$MAIN_CONFIG"
+   "$MAIN_CONFIG" > /tmp/settings_final.json 2>/dev/null; then
+    
+    mv /tmp/settings_final.json "$MAIN_CONFIG"
+    echo -e "${GREEN}✓ 主配置文件已更新${NC}"
+else
+    echo -e "${RED}❌ 更新配置失败，JSON 格式错误${NC}"
+    exit 1
+fi
 
 # 检查系统中所有可能的配置文件位置并同步
 POSSIBLE_CONFIGS=(
@@ -300,6 +313,7 @@ for config_path in "${POSSIBLE_CONFIGS[@]}"; do
     config_dir=$(dirname "$config_path")
     if [ ! -d "$config_dir" ]; then
         mkdir -p "$config_dir"
+        echo -e "${YELLOW}  创建目录: $config_dir${NC}"
     fi
     
     # 复制主配置到这些位置
