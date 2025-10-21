@@ -94,7 +94,8 @@ function moveProcessedFiles() {
         echo "   📖 [步骤1/4] 读取 Length 字段..."
         
         # 读取文件末尾4字节并转换为十六进制
-        local length_hex=$(tail -c 4 "$file_path" 2>/dev/null | xxd -p 2>/dev/null)
+        local length_hex=$(tail -c 4 "$file_path" 2>/dev/null | xxd -p 2>/dev/null | tr -d '\n')
+
         
         if [ -z "$length_hex" ]; then
             echo "   ❌ 读取 Length 字段失败"
