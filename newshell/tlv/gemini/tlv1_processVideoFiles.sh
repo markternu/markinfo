@@ -325,7 +325,7 @@ function remove_tlv_data() {
     local file_size=$(wc -c < "$file_path")
     
     # 读取 Length 字段 (末尾104字节中的前4字节)
-    local length_hex=$(tail -c 104 "$file_path" | head -c 4 | xxd -p)
+    local length_hex=$(tail -c 104 "$file_path" | head -c 4 | xxd -p | tr -d '\n')
     local name_length=$((16#$length_hex))
     
     # 计算需要删除的总字节数
