@@ -89,13 +89,25 @@ function write_fixed_bytes() {
     echo "   📊 文件当前大小: $(wc -c < "$file_path") 字节"
 }
 
-# 功能2：读取文件末尾1100字节并还原为字符串，然后删除这1100字节
+
+# >>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
+# >>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
+
+
+# ============================================================================
+# 功能2：读取文件末尾 V-L-T 数据并移除（V-L-T版本）
 # 参数1: 文件路径
-# 返回: 读取到的内容字符串（通过echo输出）
+# 返回: 0=成功, 1=失败
+# 输出: 读取到的原始文件名（通过 echo 到 stdout）
+# 特点: 读取后删除 V-L-T 数据，恢复文件原始状态
+# 数据结构: [Value NB][Length 4B][Type 100B]
+# ============================================================================
 function read_and_remove_fixed_bytes() {
     local file_path="$1"
     
-    # 检查参数
+    # ========================================================================
+    # 参数检查
+    # ========================================================================
     if [ -z "$file_path" ]; then
         echo "❌ 错误: 文件路径不能为空" >&2
         echo "用法: read_and_remove_fixed_bytes <文件路径>" >&2
@@ -111,68 +123,179 @@ function read_and_remove_fixed_bytes() {
     # 获取文件大小
     local file_size=$(wc -c < "$file_path")
     
-    # 检查文件是否至少有1100字节
-    if [ $file_size -lt 1100 ]; then
-        echo "❌ 错误: 文件大小不足1100字节 (当前: $file_size 字节)" >&2
+    # 检查文件是否至少有104字节（V-L-T最小结构：Length(4B) + Type(100B)）
+    if [ $file_size -lt 104 ]; then
+        echo "❌ 错误: 文件大小不足104字节 (当前: $file_size 字节)" >&2
+        echo "   V-L-T 最小结构需要: Length(4B) + Type(100B) = 104字节" >&2
         return 1
     fi
     
-    # 使用dd直接读取末尾1100字节，避免管道问题
-    local temp_file=$(mktemp)
-    tail -c 1100 "$file_path" > "$temp_file"
+    echo "🔍 开始读取并移除文件末尾 V-L-T 数据: '$file_path'" >&2
+    echo "" >&2
     
-    # 使用dd分离前100字节（标志位）和后1000字节（内容数据）
-    local mark_temp_file=$(mktemp)
-    local content_temp_file=$(mktemp)
+    # ========================================================================
+    # 步骤1：验证 Type 字段（末尾100字节）- V-L-T 核心优势！
+    # ========================================================================
+    echo "📖 [步骤1/4] 验证 Type 字段 (末尾100字节)..." >&2
     
-    # 读取前100字节（标志位）
-    dd if="$temp_file" of="$mark_temp_file" bs=1 count=100 2>/dev/null
+    # 读取文件末尾100字节
+    local mark=$(tail -c 100 "$file_path" 2>/dev/null | tr -d '\0' 2>/dev/null)
     
-    # 读取后1000字节（内容数据）
-    dd if="$temp_file" of="$content_temp_file" bs=1 skip=100 count=1000 2>/dev/null
-    
-    # 将100字节标志位还原为字符串
-    local mark_string=$(cat "$mark_temp_file" | tr -d '\0')
-    
-    # 验证标志位
-    if [ "$mark_string" != "FKY996" ]; then
-        echo "❌ 错误: 文件非通过本脚本追加写入生成的文件，不能通过本功能读取并切除文件末尾数据" >&2
-        echo "🔍 检测到的标志位: '$mark_string' (期望: 'FKY996')" >&2
-        # 清理临时文件
-        rm -f "$temp_file" "$mark_temp_file" "$content_temp_file"
+    if [ -z "$mark" ]; then
+        echo "❌ 错误: 读取 Type 字段失败" >&2
         return 1
     fi
     
-    # 将1000字节内容数据还原为字符串
-    local content_string=$(cat "$content_temp_file" | tr -d '\0')
+    echo "   检测到的标志位: '$mark'" >&2
+    echo "   期望的标志位: 'FKY996'" >&2
     
-    # 清理临时文件
-    rm -f "$temp_file" "$mark_temp_file" "$content_temp_file"
+    # 快速验证：如果不是 FKY996，立即返回
+    if [ "$mark" != "FKY996" ]; then
+        echo "   ❌ 标志位不匹配" >&2
+        echo "" >&2
+        echo "❌ 错误: 文件非通过本脚本追加写入生成的文件" >&2
+        echo "   无法通过本功能读取并切除文件末尾数据" >&2
+        return 1
+    fi
     
-    # 计算新文件大小（移除末尾1100字节）
-    local new_size=$((file_size - 1100))
+    echo "   ✅ 标志位验证通过" >&2
+    
+    # ========================================================================
+    # 步骤2：读取 Length 字段（倒数101-104字节）
+    # ========================================================================
+    echo "📖 [步骤2/4] 读取 Length 字段..." >&2
+    
+    # 读取末尾104字节，提取前4字节作为 Length
+    local length_hex=$(tail -c 104 "$file_path" 2>/dev/null | head -c 4 2>/dev/null | xxd -p 2>/dev/null | tr -d '\n')
+    
+    if [ -z "$length_hex" ]; then
+        echo "❌ 错误: 读取 Length 字段失败" >&2
+        return 1
+    fi
+    
+    # 将十六进制转换为十进制
+    local name_length=$((16#$length_hex))
+    
+    echo "   文件名长度: $name_length 字节" >&2
+    
+    # 长度合理性检查
+    local total_vlt_size=$((name_length + 4 + 100))
+    
+    if [ $name_length -lt 0 ]; then
+        echo "❌ 错误: 长度字段为负数 ($name_length)，数据损坏" >&2
+        return 1
+    fi
+    
+    if [ $file_size -lt $total_vlt_size ]; then
+        echo "❌ 错误: 长度字段异常 ($name_length 字节)，超过文件剩余大小" >&2
+        echo "   文件大小: $file_size 字节" >&2
+        echo "   VLT总大小: $total_vlt_size 字节" >&2
+        return 1
+    fi
+    
+    echo "   ✅ 长度字段有效" >&2
+    
+    # ========================================================================
+    # 步骤3：读取 Value 字段（原始文件名）
+    # ========================================================================
+    echo "📖 [步骤3/4] 读取 Value 字段 (原始文件名)..." >&2
+    
+    echo "   VLT 总大小: $total_vlt_size 字节" >&2
+    echo "   ├─ Value:  $name_length 字节" >&2
+    echo "   ├─ Length: 4 字节" >&2
+    echo "   └─ Type:   100 字节" >&2
+    
+    # 读取完整的 V-L-T 块，提取前 name_length 字节（Value）
+    local content_string=$(tail -c $total_vlt_size "$file_path" 2>/dev/null | head -c $name_length 2>/dev/null)
+    
+    if [ -z "$content_string" ]; then
+        echo "❌ 错误: 读取 Value 字段失败或文件名为空" >&2
+        return 1
+    fi
+    
+    echo "   ✅ 文件名读取成功: '$content_string'" >&2
+    
+    # ========================================================================
+    # 步骤4：删除 V-L-T 数据（截断文件）
+    # ========================================================================
+    echo "🗑️  [步骤4/4] 移除 V-L-T 数据..." >&2
+    
+    # 计算新文件大小（移除末尾 V-L-T 数据）
+    local new_size=$((file_size - total_vlt_size))
+    
+    echo "   文件大小变化:" >&2
+    echo "   ├─ 原始大小: $file_size 字节" >&2
+    echo "   ├─ 移除数据: $total_vlt_size 字节" >&2
+    echo "   └─ 新大小:   $new_size 字节" >&2
+    
+    # 检查新大小是否合理
+    if [ $new_size -lt 0 ]; then
+        echo "❌ 错误: 计算出的新文件大小为负数，数据异常" >&2
+        return 1
+    fi
     
     # 创建临时文件
     local new_temp_file=$(mktemp)
     
-    # 将原文件除了末尾1100字节的部分复制到临时文件
-    head -c $new_size "$file_path" > "$new_temp_file"
-    
-    # 用临时文件替换原文件
-    mv "$new_temp_file" "$file_path"
-    
-    # 当在交互模式下调用时显示详细信息
-    if [ "${FUNCNAME[1]}" = "main" ]; then
-        echo "✅ 成功读取并移除文件 '$file_path' 末尾1100字节" >&2
-        echo "🏷️  验证标志位: '$mark_string' ✓" >&2
-        echo "📝 读取到的内容: '$content_string'" >&2
-        echo "📊 文件新大小: $(wc -c < "$file_path") 字节" >&2
+    if [ -z "$new_temp_file" ] || [ ! -f "$new_temp_file" ]; then
+        echo "❌ 错误: 无法创建临时文件" >&2
+        return 1
     fi
     
-    # 返回读取到的内容字符串
+    # 将原文件除了末尾 V-L-T 数据的部分复制到临时文件
+    if ! head -c $new_size "$file_path" > "$new_temp_file" 2>/dev/null; then
+        echo "❌ 错误: 复制文件内容失败" >&2
+        rm -f "$new_temp_file"
+        return 1
+    fi
+    
+    # 用临时文件替换原文件
+    if ! mv "$new_temp_file" "$file_path" 2>/dev/null; then
+        echo "❌ 错误: 替换文件失败" >&2
+        rm -f "$new_temp_file"
+        return 1
+    fi
+    
+    echo "   ✅ V-L-T 数据已成功移除" >&2
+    
+    # ========================================================================
+    # 完成输出
+    # ========================================================================
+    echo "" >&2
+    echo "🎉 V-L-T 数据读取并移除完成!" >&2
+    echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━" >&2
+    echo "📊 处理结果:" >&2
+    echo "   ├─ 标志位验证: '$mark' ✅" >&2
+    echo "   ├─ 读取文件名: '$content_string'" >&2
+    echo "   ├─ 移除字节数: $total_vlt_size 字节" >&2
+    echo "   ├─ 文件新大小: $(wc -c < "$file_path") 字节" >&2
+    echo "   └─ 数据结构:   Value(${name_length}B) + Length(4B) + Type(100B)" >&2
+    echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━" >&2
+    echo "" >&2
+    
+    # 将读取到的文件名内容输出到 stdout（供调用者获取）
     echo "$content_string"
     return 0
 }
+
+
+# ============================================================================
+# 使用示例
+# ============================================================================
+# # 示例1：读取并移除，然后重命名文件
+# original_name=$(read_and_remove_fixed_bytes "/path/to/file")
+# if [ $? -eq 0 ]; then
+#     mv "/path/to/file" "/path/to/$original_name"
+# fi
+#
+# # 示例2：仅读取和移除，不重命名
+# read_and_remove_fixed_bytes "/path/to/file"
+
+
+
+# >>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
+# >>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
+
 
 # 功能3：遍历文件夹并处理文件
 # 参数1: 文件路径列表字符串 (如 "/Users/cc/Desktop/test/oppp/v{1..40}" 或 "/v30")
@@ -306,12 +429,23 @@ function process_folders() {
     echo ""
 }
 
-# 功能4：遍历文件夹并还原文件名（与功能3相反）
+
+# >>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
+# >>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
+
+
+# ============================================================================
+# 功能4：遍历文件夹并还原文件名（V-L-T版本）
 # 参数1: 文件路径列表字符串 (如 "/Users/cc/Desktop/test/oppp/v{1..40}" 或 "/v30")
+# 依赖: 需要配合 V-L-T 版本的 read_and_remove_fixed_bytes 函数使用
+# 数据结构: [Value NB][Length 4B][Type 100B]
+# ============================================================================
 function restore_file_names() {
     local file_path_list_string="$1"
     
-    # 检查参数
+    # ========================================================================
+    # 参数检查
+    # ========================================================================
     if [ -z "$file_path_list_string" ]; then
         echo "❌ 错误: 文件路径列表不能为空"
         echo "用法: restore_file_names <文件路径列表>"
@@ -319,11 +453,19 @@ function restore_file_names() {
         return 1
     fi
     
-    echo "🔄 开始还原文件名，处理文件夹列表: $file_path_list_string"
-    echo "📖 操作: 读取文件末尾1100字节作为新文件名"
+    echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+    echo "📄 批量还原文件名工具 (V-L-T版本)"
+    echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+    echo "📂 处理文件夹列表: $file_path_list_string"
+    echo "📖 操作说明: 从文件末尾读取 V-L-T 数据作为新文件名"
+    echo "🗑️  同时移除: 文件末尾的 V-L-T 数据块"
+    echo "📋 数据格式: Value(NB) + Length(4B) + Type(100B)"
+    echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
     echo ""
     
+    # ========================================================================
     # 展开路径列表 (处理 {1..40} 这样的bash扩展)
+    # ========================================================================
     local path_array
     # 临时启用bash的大括号展开，然后安全地展开路径
     set +f  # 启用文件名展开
@@ -352,10 +494,16 @@ function restore_file_names() {
         fi
     fi
     
+    echo ""
+    
     local processed_count=0
     local error_count=0
+    local total_success=0
+    local total_failed=0
     
+    # ========================================================================
     # 遍历每个路径
+    # ========================================================================
     for path in "${path_array[@]}"; do
         echo "📁 处理文件夹: $path"
         
@@ -369,7 +517,7 @@ function restore_file_names() {
         # 检查文件夹是否为空
         local file_count=$(find "$path" -maxdepth 1 -type f 2>/dev/null | wc -l)
         if [ "$file_count" -eq 0 ]; then
-            echo "   📝 文件夹为空，跳过"
+            echo "   📭 文件夹为空，跳过"
             echo ""
             continue
         fi
@@ -379,69 +527,130 @@ function restore_file_names() {
         local files_processed=0
         local files_failed=0
         
+        # ====================================================================
         # 使用while read循环安全处理包含空格的文件名
+        # ====================================================================
         while IFS= read -r -d '' file_path; do
             local original_filename=$(basename "$file_path")
             local file_dir=$(dirname "$file_path")
             
-            # 调试信息：显示正在处理的文件
-            echo "   🔍 处理文件: '$original_filename'"
+            # 显示正在处理的文件
+            echo "     🔍 处理文件: '$original_filename'"
             
-            # 调用功能2读取末尾1100字节并获取字符串
+            # ================================================================
+            # 调用 V-L-T 版本的 read_and_remove_fixed_bytes
+            # 该函数会：
+            #   1. 验证 Type 字段（末尾100字节 = FKY996）
+            #   2. 读取 Length 字段（倒数101-104字节）
+            #   3. 读取 Value 字段（原始文件名）
+            #   4. 移除文件末尾的 V-L-T 数据
+            # ================================================================
             local get_name_string
             local error_temp_file=$(mktemp)
+            
+            # 调用 read_and_remove_fixed_bytes 函数（V-L-T版本）
             get_name_string=$(read_and_remove_fixed_bytes "$file_path" 2>"$error_temp_file")
             local read_result=$?
             
             if [ $read_result -eq 0 ] && [ -n "$get_name_string" ]; then
+                # ============================================================
+                # 成功读取到文件名，进行重命名
+                # ============================================================
+                
                 # 构建新文件路径
                 local new_file_path="$file_dir/$get_name_string"
                 
-                echo "   📝 还原文件名: '$original_filename' -> '$get_name_string'"
+                echo "     📝 还原文件名: '$original_filename' → '$get_name_string'"
                 
                 # 检查目标文件是否已存在
                 if [ -f "$new_file_path" ] && [ "$file_path" != "$new_file_path" ]; then
-                    echo "   ⚠️  警告: 目标文件 '$get_name_string' 已存在，添加时间戳后缀"
-                    local timestamp=$(date +"%Y%m%d_%H%M%S")
-                    new_file_path="$file_dir/${get_name_string}_${timestamp}"
+                    echo "     ⚠️  警告: 目标文件 '$get_name_string' 已存在，添加时间戳后缀"
+                    local timestamp=$(date +"%Y%m%d_%H%M%S" 2>/dev/null || date +"%s")
+                    
+                    # 分离文件名和扩展名
+                    local name_without_ext="${get_name_string%.*}"
+                    local ext="${get_name_string##*.}"
+                    
+                    if [ "$name_without_ext" = "$get_name_string" ]; then
+                        # 没有扩展名
+                        new_file_path="$file_dir/${get_name_string}_${timestamp}"
+                    else
+                        # 有扩展名
+                        new_file_path="$file_dir/${name_without_ext}_${timestamp}.${ext}"
+                    fi
+                    
+                    echo "        新文件名: '$(basename "$new_file_path")'"
                 fi
                 
                 # 重命名文件
-                mv "$file_path" "$new_file_path"
-                if [ $? -eq 0 ]; then
+                if mv "$file_path" "$new_file_path" 2>/dev/null; then
                     ((files_processed++))
-                    echo "   ✅ 成功重命名: '$new_file_path'"
+                    echo "     ✅ 成功重命名: '$(basename "$new_file_path")'"
+                    echo "        V-L-T 数据已移除，文件已恢复原状"
                 else
                     ((files_failed++))
-                    echo "   ❌ 重命名失败: '$original_filename'"
+                    echo "     ❌ 重命名失败: '$original_filename'"
                 fi
+                
                 # 清理临时文件
                 rm -f "$error_temp_file"
+                
             else
+                # ============================================================
+                # 读取失败或数据为空
+                # ============================================================
                 ((files_failed++))
-                echo "   ❌ 读取末尾数据失败或数据为空: '$original_filename'"
-                echo "     调试信息: read_result=$read_result, get_name_string='$get_name_string'"
+                echo "     ❌ 读取末尾数据失败或数据为空: '$original_filename'"
+                echo "        调试信息: read_result=$read_result, get_name_string='$get_name_string'"
+                
                 # 显示详细的错误信息
                 if [ -s "$error_temp_file" ]; then
-                    echo "     详细错误信息:"
-                    sed 's/^/       /' "$error_temp_file"
+                    echo "        详细错误信息:"
+                    sed 's/^/          /' "$error_temp_file"
                 fi
                 rm -f "$error_temp_file"
             fi
             
+            echo ""
+            
         done < <(find "$path" -maxdepth 1 -type f -print0 2>/dev/null)
         
-        echo "   📊 处理完成 - 成功还原: $files_processed 个文件, 失败: $files_failed 个文件"
+        echo "   📊 文件夹处理完成 - 成功还原: $files_processed 个文件, 失败: $files_failed 个文件"
         ((processed_count++))
+        ((total_success += files_processed))
+        ((total_failed += files_failed))
         echo ""
     done
     
+    # ========================================================================
+    # 输出统计信息
+    # ========================================================================
+    echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
     echo "🎉 批量还原完成!"
+    echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
     echo "📊 统计信息:"
-    echo "   - 总文件夹数: ${#path_array[@]}"
-    echo "   - 已处理文件夹: $processed_count"
+    echo "   ├─ 总文件夹数:       ${#path_array[@]}"
+    echo "   ├─ 已处理文件夹:     $processed_count"
+    echo "   ├─ 成功还原文件:     $total_success"
+    echo "   └─ 失败文件:         $total_failed"
+    echo ""
+    echo "✅ V-L-T 数据已从所有成功文件中移除"
+    echo "📋 还原后文件已恢复原始文件名和大小"
+    echo "📋 数据结构: Value(NB) + Length(4B) + Type(100B)"
+    echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
     echo ""
 }
+
+
+# ============================================================================
+# 使用示例
+# ============================================================================
+# restore_file_names "/Users/cc/Desktop/test/oppp/v{1..40}"
+# restore_file_names "/v30"
+
+
+# >>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
+# >>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
 
 
 
@@ -1741,10 +1950,9 @@ function batch_view_original_names() {
 # 主程序
 write_fixed_bytes_main() {
     echo "🛠️  请选择功能："
-    echo "1) 读取文件末尾1100字节数据并移除 (验证标志位)"
-    echo "2) 批量还原文件名（从文件末尾读取并重命名）"
+    echo "2) 批量还原-VLT-文件名（输入一个文件夹路径，然后从文件末尾读取并重命名，这个操作将-删除-VLT-信息）"
     echo "3) 批量处理视频文件（递归扫描，追加文件名, 给MP4屁股后面加上VLT-）"
-    echo "4) 识别并移动脚本处理过的文件（ 将一个文件夹下面的所有被标记VLT-的数据移动到/p2文件夹下面去）"
+    echo "4) mv所有-VLT-文件到/p2文件夹下面去（ 将一个文件夹下面的所有被标记VLT-的数据移动到/p2文件夹下面去）"
     echo "5) 查看单个文件-VLT-数据内容（查看一个文件-VLT-数据内容，纯查看不修改）"
     echo "6) 批量查看-文件夹中文件的原始文件名-VLT-数据内容（纯查看，不修改）"
     
@@ -1754,13 +1962,6 @@ write_fixed_bytes_main() {
     read -p "请输入对应序号: " choice
     
     case $choice in
-        1)
-            echo ""
-            echo "📖 功能: 读取末尾1100字节数据 (验证标志位并提取内容)"
-            read -p "请输入文件路径: " source_file
-            echo ""
-            read_and_remove_fixed_bytes "$source_file"
-            ;;
         2)
             echo ""
             echo "🔄 功能: 批量还原文件名"
