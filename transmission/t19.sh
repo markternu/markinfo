@@ -1048,7 +1048,7 @@ function moveProcessedFiles() {
     echo "📂 扫描文件夹: '$folderPath'"
     echo "🎯 目标文件夹: '$target_folder'"
     echo "🔍 识别条件: 文件末尾100字节为 'FKY996' 标志位"
-    echo "📝 操作流程: 验证标志位 → 读取文件名 → 重命名 → 移动"
+    echo "📝 操作流程: 验证标志位 → 读取原始文件名 → 生成新序号文件名 → 移动"
     echo "📋 数据格式: Value(NB) + Length(4B) + Type(100B)"
     echo ""
     echo "🔄 正在递归扫描文件..."
@@ -1111,7 +1111,7 @@ function moveProcessedFiles() {
         # ====================================================================
         # 步骤1：验证 Type 字段（末尾100字节）- V-L-T 核心优势！
         # ====================================================================
-        echo "   📖 [步骤1/4] 验证 Type 字段 (末尾100字节)..."
+        echo "   📖 [步骤1/5] 验证 Type 字段 (末尾100字节)..."
         
         # 读取文件末尾100字节
         local mark=$(tail -c 100 "$file_path" 2>/dev/null | tr -d '\0' 2>/dev/null)
@@ -1139,7 +1139,7 @@ function moveProcessedFiles() {
         # ====================================================================
         # 步骤2：读取 Length 字段（倒数101-104字节）
         # ====================================================================
-        echo "   📖 [步骤2/4] 读取 Length 字段..."
+        echo "   📖 [步骤2/5] 读取 Length 字段..."
         
         # 读取末尾104字节，提取前4字节作为 Length
         local length_hex=$(tail -c 104 "$file_path" 2>/dev/null | head -c 4 2>/dev/null | xxd -p 2>/dev/null | tr -d '\n')
@@ -1154,7 +1154,7 @@ function moveProcessedFiles() {
         # 将十六进制转换为十进制
         local name_length=$((16#$length_hex))
         
-        echo "      文件名长度: $name_length 字节"
+        echo "      原始文件名长度: $name_length 字节"
         
         # 长度合理性检查
         local total_vlt_size=$((name_length + 4 + 100))
@@ -1169,9 +1169,9 @@ function moveProcessedFiles() {
         echo "      ✅ Length 字段有效"
         
         # ====================================================================
-        # 步骤3：读取 Value 字段（文件名）
+        # 步骤3：读取 Value 字段（原始文件名）
         # ====================================================================
-        echo "   📖 [步骤3/4] 读取 Value 字段 ($name_length 字节)..."
+        echo "   📖 [步骤3/5] 读取 Value 字段 (原始文件名)..."
         
         echo "      VLT 总大小: $total_vlt_size 字节"
         echo "      ├─ Value:  $name_length 字节"
@@ -1179,63 +1179,76 @@ function moveProcessedFiles() {
         echo "      └─ Type:   100 字节"
         
         # 读取完整的 V-L-T 块，提取前 name_length 字节（Value）
-        local new_name_string=$(tail -c $total_vlt_size "$file_path" 2>/dev/null | head -c $name_length 2>/dev/null)
+        local original_name_string=$(tail -c $total_vlt_size "$file_path" 2>/dev/null | head -c $name_length 2>/dev/null)
         
-        if [ -z "$new_name_string" ]; then
+        if [ -z "$original_name_string" ]; then
             ((failed_files++))
-            echo "   ❌ 提取文件名失败：文件名为空"
+            echo "   ❌ 提取原始文件名失败：文件名为空"
             echo ""
             continue
         fi
         
-        echo "      🏷️  提取到的文件名: '$new_name_string'"
+        echo "      📄 读取到的原始文件名: '$original_name_string'"
         echo "      ✅ Value 字段读取成功"
         
         # ====================================================================
-        # 步骤4：重命名文件（如果需要）
+        # 步骤4：生成新的序号文件名（关键步骤！）
         # ====================================================================
-        echo "   📝 [步骤4/4] 重命名并移动文件..."
+        echo "   🔢 [步骤4/5] 生成新序号文件名..."
+        
+        local new_name_string
+        local error_temp_file=$(mktemp)
+        
+        # 调用 getFileName 函数生成新文件名（如 dom1, dom2, dom3...）
+        new_name_string=$(getFileName 2>"$error_temp_file")
+        local get_name_result=$?
+        
+        if [ $get_name_result -ne 0 ] || [ -z "$new_name_string" ]; then
+            ((failed_files++))
+            echo "   ❌ 生成新文件名失败 (返回码: $get_name_result)"
+            
+            # 显示详细错误信息
+            if [ -s "$error_temp_file" ]; then
+                echo "      详细错误信息:"
+                sed 's/^/        /' "$error_temp_file"
+            fi
+            rm -f "$error_temp_file"
+            echo ""
+            continue
+        fi
+        
+        rm -f "$error_temp_file"
+        
+        echo "      🏷️  生成的新文件名: '$new_name_string'"
+        echo "      📝 文件名映射: '$original_name_string' → '$new_name_string'"
+        
+        # ====================================================================
+        # 步骤5：重命名并移动文件
+        # ====================================================================
+        echo "   📦 [步骤5/5] 重命名并移动文件..."
         
         local file_dir=$(dirname "$file_path")
         local temp_new_path="$file_dir/$new_name_string"
         
-        # 检查新文件名是否与原文件名相同
-        if [ "$filename" = "$new_name_string" ]; then
-            echo "      ℹ️  文件名无需更改，直接移动"
-            temp_new_path="$file_path"
-        else
-            # 需要重命名
-            echo "      📝 重命名: '$filename' → '$new_name_string'"
-            if mv "$file_path" "$temp_new_path" 2>/dev/null; then
-                echo "      ✅ 成功重命名文件"
-            else
-                ((failed_files++))
-                echo "   ❌ 重命名文件失败"
-                echo ""
-                continue
-            fi
+        # 重命名为新的序号文件名
+        echo "      📝 重命名: '$filename' → '$new_name_string'"
+        if ! mv "$file_path" "$temp_new_path" 2>/dev/null; then
+            ((failed_files++))
+            echo "   ❌ 重命名文件失败"
+            echo ""
+            continue
         fi
         
-        # ====================================================================
-        # 步骤5：移动文件到目标文件夹
-        # ====================================================================
+        echo "      ✅ 成功重命名文件"
+        
+        # 移动到目标文件夹
         local final_target_path="$target_folder/$new_name_string"
         
-        # 检查目标位置是否已有同名文件
+        # 检查目标位置是否已有同名文件（理论上不应该，因为是序号）
         if [ -f "$final_target_path" ]; then
-            echo "      ⚠️  目标位置已存在同名文件，添加时间戳后缀"
+            echo "      ⚠️  警告: 目标位置已存在 '$new_name_string'，添加时间戳后缀"
             local timestamp=$(date +"%Y%m%d_%H%M%S_%N" 2>/dev/null || date +"%Y%m%d_%H%M%S")
-            local name_without_ext="${new_name_string%.*}"
-            local ext="${new_name_string##*.}"
-            
-            if [ "$name_without_ext" = "$new_name_string" ]; then
-                # 没有扩展名
-                final_target_path="$target_folder/${new_name_string}_${timestamp}"
-            else
-                # 有扩展名
-                final_target_path="$target_folder/${name_without_ext}_${timestamp}.${ext}"
-            fi
-            
+            final_target_path="$target_folder/${new_name_string}_${timestamp}"
             echo "         新文件名: '$(basename "$final_target_path")'"
         fi
         
@@ -1243,15 +1256,14 @@ function moveProcessedFiles() {
         if mv "$temp_new_path" "$final_target_path" 2>/dev/null; then
             ((moved_files++))
             echo "   🎉 成功移动文件"
+            echo "      ✅ 完整流程: '$filename' (原名: '$original_name_string') → '$new_name_string' → '$target_folder/'"
         else
             ((failed_files++))
             echo "   ❌ 移动文件失败"
             
-            # 如果重命名了但移动失败，尝试恢复原文件名
-            if [ "$temp_new_path" != "$file_path" ] && [ -f "$temp_new_path" ]; then
-                echo "      🔄 尝试恢复原文件名"
-                mv "$temp_new_path" "$file_path" 2>/dev/null
-            fi
+            # 移动失败，尝试恢复原文件名
+            echo "      🔄 尝试恢复原文件名"
+            mv "$temp_new_path" "$file_path" 2>/dev/null
         fi
         
         echo ""
@@ -1273,9 +1285,11 @@ function moveProcessedFiles() {
     echo ""
     echo "✅ 所有符合 V-L-T 格式的文件已处理完毕"
     echo "📋 数据结构: Value(NB) + Length(4B) + Type(100B)"
+    echo "🏷️  文件命名: dom1, dom2, dom3... (按处理顺序)"
     echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
     echo ""
 }
+
 
 
 # ============================================================================
