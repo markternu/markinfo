@@ -254,7 +254,7 @@ function read_fixed_bytes() {
     echo "📖 [Length] 读取长度字段 (末尾 104 字节中的前 4 字节)..." >&2
     
     # 读取 L+T 块 (末尾104字节)，并提取 L (前4字节)
-    local length_hex=$(tail -c 104 "$file_path" | head -c 4 | xxd -p)
+    local length_hex=$(tail -c 104 "$file_path" | head -c 4 | xxd -p | tr -d '\n')
     local name_length=$((16#$length_hex))
     
     echo "   文件名长度: $name_length 字节" >&2
