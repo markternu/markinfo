@@ -1,3 +1,13 @@
+
+# # 0-所有信息都在脚本里-获取所有信息直接-git clone
+
+
+```
+
+git clone https://github.com/markternu/markinfo.git
+
+```
+
 # 1安装zsh
 ## 一条命令
 
