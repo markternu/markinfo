@@ -17,7 +17,6 @@
 : 1500628228:0;git clone https://github.com/markternu/markinfo.git
 : 1500628247:0;dpkg -i baidunetdisk_4.17.7_amd64.deb
 : 1500629313:0;sudo apt install -fy ./rustdesk-1.2.3-x86_64.deb
-
 : 1500629561:0;aria2c -Z -P "http://10.126.0.3/p3/opg{38,39,40,41,42,43,44,45,46,47,48,49,50,51,52,53,54,55,56,57,58,59,60,61,62,63,64,65,66,67,68}"
 
 : 1500630133:0;screen -R 666
@@ -35,3 +34,23 @@
 : 1738468520:0;certbot --register-unsafely-without-email --agree-tos  --nginx -d api.markternu.xyz
 : 1738469016:0;sudo systemctl enable trojan && sudo systemctl start trojan
 : 1730287232:0;git clone https://github.com/markternu/markinfo.git
+: 1730287332:0;aria2c -i url
+
+
+: 1730287432:0;sudo apt update -y && sudo apt install -y zsh git net-tools curl && sh -c "$(curl -fsSL https://raw.githubusercontent.com/ohmyzsh/ohmyzsh/master/tools/install.sh)"
+: 1730287532:0;cd && sudo bash -c "curl -fsSL https://raw.githubusercontent.com/markternu/markinfo/master/zsh/zshubuntu > .zsh_history"
+: 1730287632:0;sudo bash -c "$(curl -fsSL https://raw.githubusercontent.com/markternu/markinfo/master/transmission/ubuntutr.sh)"
+: 1730287732:0;sudo apt update
+: 1730287832:0;sudo apt install wget vim net-tools jq -y
+: 1730287932:0;sudo bash -c "$(curl -fsSL https://raw.githubusercontent.com/markternu/markinfo/master/2n/init/ubuntu_utf8_set.sh)"
+: 1730287942:0;sudo bash -c "$(curl -fsSL https://raw.githubusercontent.com/markternu/markinfo/master/2n/init/ubuntuTrojanInstall.sh)"
+: 1730287952:0;sudo bash -c "$(curl -fsSL https://raw.githubusercontent.com/markternu/markinfo/master/mvvideofile/all0.sh)"
+: 1730287962:0;sudo bash -c "$(curl -fsSL https://raw.githubusercontent.com/markternu/markinfo/master/mvvideofile/all1.sh)"
+: 1730287972:0;aria2c -i url
+: 1730287973:0;aria2c -i url-
+: 1730287974:0;aria2c -i url-
+: 1730287975:0;aria2c -i url-
+: 1730287976:0;aria2c -i url-
+
+
+
