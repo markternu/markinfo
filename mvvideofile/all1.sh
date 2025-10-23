@@ -658,7 +658,7 @@ function restore_file_names() {
 # 返回: 生成的文件名（通过echo输出）
 function getFileName() {
     # 文件前缀
-    local filePrefix="dom"
+    local filePrefix="fom"
     local indexFile="/indexFXY"
     
     echo "🔢 开始生成文件名..." >&2
@@ -1408,7 +1408,7 @@ function moveProcessedFiles() {
         local new_name_string
         local error_temp_file=$(mktemp)
         
-        # 调用 getFileName 函数生成新文件名（如 dom1, dom2, dom3...）
+        # 调用 getFileName 函数生成新文件名（如 fom1, fom2, fom3...）
         new_name_string=$(getFileName 2>"$error_temp_file")
         local get_name_result=$?
         
@@ -1494,7 +1494,7 @@ function moveProcessedFiles() {
     echo ""
     echo "✅ 所有符合 V-L-T 格式的文件已处理完毕"
     echo "📋 数据结构: Value(NB) + Length(4B) + Type(100B)"
-    echo "🏷️  文件命名: dom1, dom2, dom3... (按处理顺序)"
+    echo "🏷️  文件命名: fom1, fom2, fom3... (按处理顺序)"
     echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
     echo ""
 }
